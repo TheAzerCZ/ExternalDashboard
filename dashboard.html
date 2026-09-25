@@ -1,0 +1,534 @@
+<!doctype html>
+<html lang="cs">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Palubka – ETS2</title>
+<style>
+  /* Bahnschrift = DIN 1451, písmo německých dálničních cedulí. Je součástí Windows, nic se nestahuje. */
+  :root {
+    --road: #1a2430;        /* noční asfalt */
+    --road-2: #212d3b;
+    --line: #2d3b4b;
+    --sign: #0e518d;        /* RAL 5017, modrá dálničních cedulí */
+    --white: #f2f4f2;
+    --muted: #8a9bad;
+    --red: #c1121c;         /* RAL 3020, okraj značky */
+    --amber: #f5a800;       /* RAL 1003, přechodné značení */
+    --green: #2fa36b;
+    --u: min(0.86vw, 1.53vh);  /* základní jednotka, škáluje s monitorem */
+    font-family: Bahnschrift, "DIN Alternate", "Roboto Condensed", "Arial Narrow", sans-serif;
+    font-variant-numeric: tabular-nums;
+  }
+  * { box-sizing: border-box; margin: 0; }
+  html, body { height: 100%; background: var(--road); color: var(--white); overflow: hidden; }
+  body { display: grid; grid-template-rows: auto 1fr; gap: calc(var(--u)*1.2); padding: calc(var(--u)*1.2); }
+
+  /* ---------- Dálniční cedule ---------- */
+  .sign {
+    background: var(--sign); border-radius: calc(var(--u)*1.1); padding: calc(var(--u)*0.45);
+    transition: filter .3s;
+  }
+  .sign-inner {
+    border: calc(var(--u)*0.3) solid var(--white); border-radius: calc(var(--u)*0.8);
+    padding: calc(var(--u)*1.3) calc(var(--u)*2);
+    display: grid; grid-template-columns: 1fr auto; gap: calc(var(--u)*1) calc(var(--u)*3); align-items: end;
+  }
+  .paused .sign { filter: saturate(.35) brightness(.8); }
+  .dest { font-stretch: 75%; font-weight: 600; line-height: .95; }
+  .dest .from { font-size: calc(var(--u)*2.2); opacity: .75; font-weight: 400; }
+  .dest .to { font-size: calc(var(--u)*6); letter-spacing: -.01em; }
+  .dest .co { font-size: calc(var(--u)*1.5); opacity: .7; font-weight: 400; margin-top: calc(var(--u)*.4); }
+  .eta { display: flex; gap: calc(var(--u)*3.2); text-align: right; }
+  .eta b { display: block; font-size: calc(var(--u)*5.2); font-weight: 600; line-height: 1; font-stretch: 87.5%; }
+  .eta small { font-size: calc(var(--u)*1.35); opacity: .8; }
+  .eta em { display: block; font-style: normal; font-size: calc(var(--u)*1.9); font-weight: 600; margin-top: calc(var(--u)*.5); }
+  .eta em:empty { display: none; }
+  .eta .real b { color: var(--white); }
+  .progress { grid-column: 1 / -1; position: relative; height: calc(var(--u)*1.6); margin-top: calc(var(--u)*.4); }
+  .progress::before { /* vodorovné značení: přerušovaná čára */
+    content: ""; position: absolute; left: 0; right: 0; top: 50%; height: calc(var(--u)*.3);
+    background: repeating-linear-gradient(90deg, rgba(242,244,242,.35) 0 calc(var(--u)*1.6), transparent 0 calc(var(--u)*2.6));
+    transform: translateY(-50%);
+  }
+  .progress .done { position: absolute; left: 0; top: 50%; height: calc(var(--u)*.3); background: var(--white); transform: translateY(-50%); }
+  .progress .truck {
+    position: absolute; top: 50%; width: calc(var(--u)*1.6); height: calc(var(--u)*1.6); border-radius: 50%;
+    background: var(--white); transform: translate(-50%, -50%); box-shadow: 0 0 0 calc(var(--u)*.35) var(--sign);
+  }
+  .progress .pct { position: absolute; right: 0; top: calc(var(--u)*-1.6); font-size: calc(var(--u)*1.2); opacity: .8; }
+  .no-route .dest .to { font-size: calc(var(--u)*4); }
+
+  /* ---------- Sloupce ---------- */
+  main { display: grid; grid-template-columns: 1.1fr 1.1fr 0.85fr 1.1fr; gap: calc(var(--u)*1.2); min-height: 0; }
+  section { background: var(--road-2); border-radius: calc(var(--u)*.6); padding: calc(var(--u)*1.4) calc(var(--u)*1.6); display: flex; flex-direction: column; gap: calc(var(--u)*1.2); min-height: 0; overflow: hidden; }
+  h2 { font-size: calc(var(--u)*1.25); font-weight: 400; color: var(--muted); }
+  .rows { align-items: baseline; display: grid; grid-template-columns: 1fr auto; row-gap: calc(var(--u)*.45); column-gap: calc(var(--u)*1); font-size: calc(var(--u)*1.45); }
+  .rows dt { color: var(--muted); white-space: nowrap; }
+  .rows dd { white-space: nowrap; }
+  .rows dd { text-align: right; }
+  .rows dd small { color: var(--muted); font-size: .8em; display: block; }
+  #srows { grid-template-columns: minmax(0, 1fr) auto; }
+  #srows dt { white-space: normal; }
+  #srows dd { white-space: normal; display: flex; flex-wrap: wrap; justify-content: flex-end; align-items: baseline; column-gap: .6em; }
+  #srows dd small { display: inline; white-space: nowrap; }
+  .cruise { display: flex !important; align-items: center; gap: .4em; }
+  .cruise .cc-icon { width: 1.3em; height: 1.3em; flex: none; }
+  .cruise.on { color: var(--green) !important; }
+  .rule { border-top: 1px solid var(--line); }
+
+  /* rychlost */
+  .speed { display: flex; align-items: center; gap: calc(var(--u)*2); }
+  .speed .num { font-size: calc(var(--u)*10); font-weight: 600; line-height: .85; font-stretch: 87.5%; min-width: 2.3ch; flex: none; }
+  .speed .num small { display: block; font-size: calc(var(--u)*1.4); font-weight: 400; color: var(--muted); margin-top: calc(var(--u)*.6); }
+  .limit {
+    width: calc(var(--u)*7.5); height: calc(var(--u)*7.5); border-radius: 50%; background: var(--white);
+    border: calc(var(--u)*.95) solid var(--red); color: #111; display: grid; place-items: center;
+    font-size: calc(var(--u)*3.1); font-weight: 700; font-stretch: 87.5%; flex: none;
+  }
+  .limit.none { background: transparent; border-color: var(--line); color: var(--muted); font-size: calc(var(--u)*1.3); font-weight: 400; }
+  .over .num { color: var(--amber); }
+  .gearbox { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: calc(var(--u)*1.2); }
+  .gearbox .g { font-size: calc(var(--u)*3.4); font-weight: 600; line-height: 1; min-width: 1.6ch; }
+  .gearbox small { color: var(--muted); font-size: calc(var(--u)*1.2); white-space: nowrap; }
+  .bar { height: calc(var(--u)*.7); background: var(--line); border-radius: 99px; overflow: hidden; }
+  .bar i { display: block; height: 100%; background: var(--white); border-radius: inherit; transition: width .25s linear; }
+  .bar.warn i { background: var(--amber); }
+  .bar.bad i { background: var(--red); }
+  .bar.ok i { background: var(--green); }
+  .chips { display: flex; flex-wrap: wrap; gap: calc(var(--u)*.5); }
+  .chip { font-size: calc(var(--u)*1.1); padding: calc(var(--u)*.3) calc(var(--u)*.75); border-radius: 99px; border: 1px solid var(--line); color: var(--muted); }
+  .chip.on { background: var(--white); color: var(--road); border-color: var(--white); }
+  .chip.alert { background: var(--amber); color: #1a1a1a; border-color: var(--amber); }
+    .chip.blink { animation: blink .8s steps(1) infinite; }
+  @keyframes blink { 50% { opacity: .25; } }
+  .tank { display: grid; grid-template-columns: auto 1fr auto; gap: calc(var(--u)*1); align-items: center; font-size: calc(var(--u)*1.4); }
+  .tank span:first-child { color: var(--muted); width: 5ch; }
+  .gauges { display: grid; grid-template-columns: repeat(3, 1fr); gap: calc(var(--u)*.9) calc(var(--u)*1.2); }
+  .gauges div { font-size: calc(var(--u)*1.7); font-weight: 600; white-space: nowrap; }
+  .gauges div small { display: block; font-size: calc(var(--u)*1.1); font-weight: 400; color: var(--muted); }
+  .gauges .alert { color: var(--amber); }
+
+  /* zakázka */
+  .cargo { font-size: calc(var(--u)*3); font-weight: 600; line-height: 1.05; font-stretch: 87.5%; }
+  .cargo small { display: block; font-size: calc(var(--u)*1.45); font-weight: 400; color: var(--muted); margin-top: calc(var(--u)*.4); }
+  .pay { font-size: calc(var(--u)*2.6); font-weight: 600; }
+  .pay small { font-size: calc(var(--u)*1.4); color: var(--muted); font-weight: 400; margin-left: .4em; }
+  .rest { display: flex; gap: calc(var(--u)*1.4); align-items: center; }
+  .rest svg { width: calc(var(--u)*5.2); height: calc(var(--u)*5.2); flex: none; }
+  .rest b { font-size: calc(var(--u)*2.8); font-weight: 600; display: block; line-height: 1; }
+  .rest span { color: var(--muted); font-size: calc(var(--u)*1.35); }
+  .rest.soon b { color: var(--amber); }
+  .rest.over b { color: #ff5a52; }
+  .blinkers { display: flex; gap: calc(var(--u)*1.2); font-size: calc(var(--u)*2.4); color: var(--line); line-height: 1; }
+  .blinkers .on { color: var(--green); }
+  .clock { font-size: calc(var(--u)*2.2); font-weight: 600; }
+
+  /* opotřebení */
+  .wear { display: grid; grid-template-columns: auto 1fr auto; white-space: nowrap; gap: calc(var(--u)*.7) calc(var(--u)*1); align-items: center; font-size: calc(var(--u)*1.35); }
+  .wear span:first-child { color: var(--muted); }
+  .wear span:last-child { text-align: right; }
+  .veh { font-size: calc(var(--u)*1.9); font-weight: 600; }
+  .veh small { color: var(--muted); font-weight: 400; font-size: .7em; margin-left: .4em; }
+
+  /* relace */
+  .big3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: calc(var(--u)*1); }
+  .big3 div { white-space: nowrap; font-size: calc(var(--u)*2.3); font-weight: 600; line-height: 1.05; }
+  .big3 small { white-space: normal; display: block; font-size: calc(var(--u)*1.1); color: var(--muted); font-weight: 400; }
+  .log { list-style: none; padding: 0; display: grid; gap: calc(var(--u)*.45); font-size: calc(var(--u)*1.3); overflow: hidden; }
+  .log li { display: grid; grid-template-columns: 5ch 1fr auto; gap: calc(var(--u)*.8); }
+  .log time { color: var(--muted); }
+  .log .fine { color: var(--amber); }
+  .log li.empty { display: block; }
+  .log .job { color: var(--green); }
+  .log .dmg { color: #ff5a52; }
+  #midSec { gap: calc(var(--u)*1); }
+  .times { display: grid; grid-template-columns: 1fr 1fr; gap: calc(var(--u)*1); }
+  .times b { display: block; font-size: calc(var(--u)*2.4); font-weight: 600; line-height: 1.1; }
+  .times small { color: var(--muted); font-size: calc(var(--u)*1.2); }
+  .times div:last-child { text-align: right; }
+  .clock { font-size: calc(var(--u)*2); font-weight: 600; }
+  .btns { display: flex; gap: calc(var(--u)*.5); flex: none; }
+  .btns button { white-space: nowrap; }
+  #since { white-space: nowrap; }
+  section.flash { animation: flash 1s ease-out 3; }
+  @keyframes flash { 0% { box-shadow: inset 0 0 0 calc(var(--u)*.35) #ff5a52; } 100% { box-shadow: inset 0 0 0 0 transparent; } }
+  /* souhrn doručení */
+  #delivery, #history { position: fixed; inset: 0; background: rgba(26,36,48,.9); display: grid; place-items: center; z-index: 10; }
+  #delivery[hidden], #history[hidden] { display: none; }
+  .dcard { background: var(--road-2); border-radius: calc(var(--u)*1); padding: calc(var(--u)*2.4); width: min(90vw, calc(var(--u)*70)); display: grid; gap: calc(var(--u)*2); }
+  .dsign { background: var(--green); border-radius: calc(var(--u)*.7); padding: calc(var(--u)*1.2) calc(var(--u)*1.8); box-shadow: inset 0 0 0 calc(var(--u)*.3) var(--white); }
+  .dsign.cancel { background: var(--red); }
+  .dsign span { display: block; font-size: calc(var(--u)*1.6); opacity: .85; }
+  .dsign b { font-size: calc(var(--u)*4); font-weight: 600; font-stretch: 87.5%; }
+  .dgrid { display: grid; grid-template-columns: 1.5fr 1fr 1fr 1fr; gap: calc(var(--u)*1.5); }
+  .dgrid b { display: block; white-space: nowrap; font-size: calc(var(--u)*2.6); font-weight: 600; }
+  .dgrid small, .dhint { color: var(--muted); font-size: calc(var(--u)*1.2); }
+  /* historie */
+  .hwrap { background: var(--road-2); border-radius: calc(var(--u)*1); padding: calc(var(--u)*2); width: 94vw; height: 90vh; display: flex; flex-direction: column; gap: calc(var(--u)*1.6); overflow: hidden; }
+  .hwrap h1 { font-size: calc(var(--u)*2.6); font-weight: 600; }
+  .hbig { grid-template-columns: repeat(5, 1fr); }
+  .hbig { grid-template-columns: 1fr 1.4fr 1.2fr 1fr 1.8fr; }
+  .hbig div { font-size: calc(var(--u)*2.8); white-space: normal; }
+  .hbig div:last-child { font-size: calc(var(--u)*2); }
+  .hcols { display: grid; grid-template-columns: 1fr 1.6fr; gap: calc(var(--u)*2.4); min-height: 0; flex: 1; }
+  .hcols > div { display: flex; flex-direction: column; gap: calc(var(--u)*1); min-height: 0; }
+  .days { flex: 1; display: flex; align-items: flex-end; gap: calc(var(--u)*.6); min-height: 0; padding-bottom: calc(var(--u)*3.2); position: relative; }
+  .day { flex: 1; max-width: calc(var(--u)*5); display: flex; flex-direction: column; justify-content: flex-end; align-items: center; height: 100%; position: relative; }
+  .day i { width: 100%; background: var(--sign); border-radius: calc(var(--u)*.3) calc(var(--u)*.3) 0 0; min-height: 2px; }
+  .day span { font-size: calc(var(--u)*1.05); color: var(--muted); position: absolute; bottom: calc(var(--u)*-2.8); white-space: nowrap; }
+  .day em { font-style: normal; font-size: calc(var(--u)*1); margin-bottom: calc(var(--u)*.3); white-space: nowrap; }
+  .htable-wrap { overflow: auto; min-height: 0; }
+  #hJobs { width: 100%; border-collapse: collapse; font-size: calc(var(--u)*1.3); }
+  #hJobs th { text-align: left; font-weight: 400; color: var(--muted); padding: calc(var(--u)*.5) calc(var(--u)*.6); position: sticky; top: 0; background: var(--road-2); }
+  #hJobs td { padding: calc(var(--u)*.5) calc(var(--u)*.6); border-top: 1px solid var(--line); white-space: nowrap; }
+  #hJobs .r { text-align: right; }
+  #hJobs tr.bad td { color: #ff5a52; }
+  .neg { color: var(--amber); }
+  .warn-t { color: var(--amber); }
+  .pos { color: var(--green); }
+  .head { display: flex; justify-content: space-between; align-items: baseline; }
+  button { font: inherit; font-size: calc(var(--u)*1.1); color: var(--muted); background: none; border: 1px solid var(--line); border-radius: 99px; padding: calc(var(--u)*.25) calc(var(--u)*.9); cursor: pointer; }
+  button:hover { color: var(--white); border-color: var(--muted); }
+  button.armed { color: #1a1a1a; background: var(--amber); border-color: var(--amber); }
+  button:focus-visible { outline: 2px solid var(--white); outline-offset: 2px; }
+  .empty { color: var(--muted); font-size: calc(var(--u)*1.4); }
+
+  /* odpojeno */
+  #offline { position: fixed; inset: 0; background: rgba(26,36,48,.94); display: none; place-items: center; text-align: center; }
+  .offline #offline { display: grid; }
+  #offline h1 { font-size: calc(var(--u)*3.4); font-weight: 600; margin-bottom: calc(var(--u)*1); }
+  #offline p { color: var(--muted); font-size: calc(var(--u)*1.5); max-width: 60ch; line-height: 1.45; }
+  #offline code { color: var(--white); }
+  .pausechip { position: fixed; z-index: 5; top: calc(var(--u)*2.2); left: 50%; transform: translateX(-50%); background: var(--amber); color: #1a1a1a; padding: calc(var(--u)*.3) calc(var(--u)*1.2); border-radius: 99px; font-size: calc(var(--u)*1.3); display: none; }
+  .paused .pausechip { display: block; }
+  @media (prefers-reduced-motion: reduce) {   .chip.blink { animation: none; } .bar i { transition: none; } }
+</style>
+</head>
+<body class="offline">
+<div class="pausechip">Hra je pozastavená</div>
+
+<header class="sign"><div class="sign-inner" id="sign">
+  <div class="dest"><div class="from" id="from">–</div><div class="to" id="to">Bez zakázky</div><div class="co" id="co"></div></div>
+  <div class="eta">
+    <div><b id="dist">–</b><small>zbývá</small></div>
+    <div class="real"><b id="real">–</b><small>reálně</small><em id="realGame"></em></div>
+    <div><b id="arr">–</b><small>příjezd v reálném čase</small><em id="arrGame"></em></div>
+  </div>
+  <div class="progress" id="prog"><div class="done" id="done"></div><div class="truck" id="truck"></div></div>
+</div></header>
+
+<main>
+  <section>
+    <div class="head"><h2>Jízda</h2><div class="blinkers"><span id="bl">◀</span><span id="br">▶</span></div></div>
+    <div class="speed" id="speedbox">
+      <div class="num"><span id="spd">0</span><small class="cruise" id="cruise"><svg class="cc-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4.5 17a8.5 8.5 0 1 1 15 0" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/><path d="M12 13.5l4.2-4.2" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/><circle cx="12" cy="13.5" r="1.8" fill="currentColor"/><path d="M8 20.5h8" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg><span id="cruiseTxt">tempomat vyp.</span></small></div>
+      <div class="limit none" id="lim">bez limitu</div>
+    </div>
+    <div class="gearbox"><div class="g" id="gear">N</div><div class="bar" id="rpmbar"><i id="rpm"></i></div><small id="retarder"></small></div>
+    <div class="chips" id="chips"></div>
+    <div class="rule"></div>
+    <div class="tank"><span>Nafta</span><div class="bar" id="fuelbar"><i id="fuel"></i></div><span id="fuelTxt">–</span></div>
+    <div class="tank"><span>AdBlue</span><div class="bar" id="adbar"><i id="ad"></i></div><span id="adTxt">–</span></div>
+    <dl class="rows">
+      <dt>Dojezd</dt><dd id="range">–</dd>
+      <dt>Průměrná spotřeba</dt><dd id="avg">–</dd>
+    </dl>
+  </section>
+
+  <section id="midSec">
+    <h2>Odpočinek a plán</h2>
+    <div class="rest" id="restbox">
+      <svg viewBox="0 0 52 52" aria-hidden="true"><rect x="1" y="1" width="50" height="50" rx="6" fill="#0e518d" stroke="#f2f4f2" stroke-width="2.5"/><path d="M11 36V17M11 30h30v6M17 25a3.5 3.5 0 1 0 0-.01M23 23h14a4 4 0 0 1 4 4v3H23z" fill="none" stroke="#f2f4f2" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      <div><b id="rest">–</b><span id="restReal">do povinné pauzy</span></div>
+    </div>
+    <dl class="rows">
+      <dt>Do cíle</dt><dd id="pSleep">–</dd>
+      <dt>Palivo</dt><dd id="pFuel">–</dd>
+    </dl>
+    <div class="times">
+      <div><b id="gtime">–</b><small id="scale">herní čas</small></div>
+      <div><b id="rtime">–</b><small>reálný čas</small></div>
+    </div>
+    <div class="rule"></div>
+    <h2>Zakázka</h2>
+    <div class="cargo" id="cargo">–<small></small></div>
+    <div class="pay" id="pay">–</div>
+    <dl class="rows">
+      <dt>Termín doručení</dt><dd id="deadline">–</dd>
+      <dt id="bufferLbl">Rezerva</dt><dd id="buffer">–</dd>
+      <dt>Poškození nákladu</dt><dd id="cdmg">–</dd>
+    </dl>
+  </section>
+
+  <section id="vehSec">
+    <h2>Vůz</h2>
+    <div class="veh" id="truckName">–</div>
+    <div class="wear" id="twear"></div>
+    <div class="rule"></div>
+    <div class="veh" id="trName">Bez návěsu</div>
+    <div class="wear" id="trwear"></div>
+    <div class="rule"></div>
+    <div class="gauges" id="gauges"></div>
+    <dl class="rows"><dt>Tachometr</dt><dd id="odo">–</dd></dl>
+  </section>
+
+  <section>
+    <div class="head"><h2 id="since">Relace</h2><div class="btns"><button id="histBtn" title="Historie zakázek (klávesa H)">Historie</button><button id="reset" title="Vynuluje statistiky relace">Nová relace</button></div></div>
+    <div class="big3">
+      <div id="sKm">0<small>km najeto</small></div>
+      <div id="sTime">0:00<small>za volantem</small></div>
+      <div id="sNet">0<small>čistý zisk</small></div>
+    </div>
+    <dl class="rows" id="srows"></dl>
+    <div class="rule"></div>
+    <ul class="log" id="log"></ul>
+  </section>
+</main>
+
+<div id="delivery" hidden><div class="dcard">
+  <div class="dsign"><span id="dTitle">Doručeno</span><b id="dRoute">–</b></div>
+  <div class="dgrid">
+    <div><b id="dRev">–</b><small>výdělek</small></div>
+    <div><b id="dXp">–</b><small>zkušenosti</small></div>
+    <div><b id="dKm">–</b><small>najeto</small></div>
+    <div><b id="dDmg">–</b><small>poškození nákladu</small></div>
+  </div>
+  <small class="dhint">Klikni kamkoliv pro zavření</small>
+</div></div>
+
+<div id="history" hidden><div class="hwrap">
+  <div class="head"><h1>Historie zakázek</h1><button id="histClose">Zavřít (Esc)</button></div>
+  <div class="big3 hbig" id="hTotals"></div>
+  <div class="hcols">
+    <div><h2>Výdělek po dnech</h2><div class="days" id="hDays"></div></div>
+    <div><h2>Poslední zakázky</h2><div class="htable-wrap"><table id="hJobs"></table></div></div>
+  </div>
+</div></div>
+
+<div id="offline"><div>
+  <h1>Čekám na hru</h1>
+  <p>Spusť ETS2 nebo ATS. Pokud se nic nestane, zkontroluj, že je <code>scs-telemetry.dll</code>
+     ve složce <code>bin\win_x64\plugins</code> ve složce hry a že jsi při startu hry potvrdil hlášku o rozšířených funkcích SDK.</p>
+</div></div>
+
+<script>
+const $ = id => document.getElementById(id);
+const nf = (v, d = 0) => v == null || isNaN(v) ? '–' : v.toLocaleString('cs-CZ', { minimumFractionDigits: d, maximumFractionDigits: d });
+const hm = s => { if (s == null) return '–'; s = Math.max(0, Math.round(s / 60)); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`; };
+const hmGame = m => m == null ? '–' : `${Math.floor(m / 60)} h ${String(Math.floor(m % 60)).padStart(2, '0')} min`;
+const clock = ts => ts ? new Date(ts * 1000).toLocaleTimeString('cs-CZ', { hour: '2-digit', minute: '2-digit' }) : '–';
+const REST_WARN_MIN = 95;  // hra hlásí únavu cca 1 h 35 min před povinnou pauzou
+const DAYS = ['Po', 'Út', 'St', 'Čt', 'Pá', 'So', 'Ne'];
+const gameClock = m => { m = Math.floor(m); return `${DAYS[Math.floor(m / 1440) % 7]} ${String(Math.floor(m % 1440 / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`; };
+let rate = 24.4945;  // herní měna (€ v ETS2, $ v ATS) -> Kč, nastavuje server
+const money = v => v == null || isNaN(v) ? '–' : `${nf(Math.round(v * rate) || 0)} Kč`;
+
+function wearRows(el, obj) {
+  el.innerHTML = Object.entries(obj).map(([k, v]) => {
+    const p = v * 100, cls = p >= 40 ? 'bad' : p >= 15 ? 'warn' : 'ok';
+    return `<span>${k}</span><div class="bar ${cls}"><i style="width:${Math.max(p, 1.5)}%"></i></div><span>${nf(p)} %</span>`;
+  }).join('');
+}
+
+function render(v) {
+  document.body.classList.toggle('offline', !v.connected);
+  rate = v.connected ? v.rate : (v.stats ? v.stats.rate : rate);
+  if (v.stats) renderStats(v.stats);
+  if (!v.connected) return;
+  document.body.classList.toggle('paused', v.paused);
+
+  // cedule
+  const j = v.job, r = v.route;
+  $('from').textContent = j ? `${j.from} →` : (r ? 'Navigace' : '–');
+  $('to').textContent = j ? j.to : (r ? 'Vlastní trasa' : 'Bez zakázky');
+  $('co').textContent = j ? `${j.compFrom} → ${j.compTo}` : '';
+  $('sign').classList.toggle('no-route', !r);
+  $('dist').textContent = r ? `${nf(r.km)} km` : '–';
+  $('real').textContent = r ? hm(r.realS) : '–';
+  $('arr').textContent = r ? clock(r.arrival) : '–';
+  $('realGame').textContent = r ? `${hmGame(r.gameMin)} herně` : '';
+  $('arrGame').textContent = r ? `${gameClock(v.timeAbs + r.gameMin)} ve hře` : '';
+  const planned = j && j.plannedKm ? j.plannedKm : null;
+  const pct = r && planned ? Math.min(100, Math.max(0, (1 - r.km / planned) * 100)) : null;
+  $('prog').style.visibility = pct == null ? 'hidden' : 'visible';
+  if (pct != null) { $('done').style.width = pct + '%'; $('truck').style.left = pct + '%'; $('prog').title = `${nf(pct)} % trasy`; }
+
+  // jízda
+  const spd = Math.round(v.speed), lim = Math.round(v.limit);
+  $('spd').textContent = spd;
+  $('speedbox').classList.toggle('over', lim > 0 && spd > lim + 2);
+  const L = $('lim');
+  L.className = lim > 0 ? 'limit' : 'limit none';
+  L.textContent = lim > 0 ? lim : 'bez limitu';
+  $('cruiseTxt').textContent = v.cruise ? `tempomat ${Math.round(v.cruise)} km/h` : 'tempomat vyp.';
+  $('cruise').classList.toggle('on', !!v.cruise);
+  $('gear').textContent = v.gear;
+  $('retarder').textContent = `${nf(v.rpm)} ot./min` + (v.retarderMax ? `, retardér ${v.retarder}/${v.retarderMax}` : '');
+  const rp = v.rpmMax ? v.rpm / v.rpmMax * 100 : 0;
+  $('rpm').style.width = rp + '%';
+  $('rpmbar').className = 'bar' + (rp > 85 ? ' bad' : rp > 70 ? ' warn' : '');
+  const l = v.lights;
+  const chips = [
+    ['Potkávací', l.lightsBeamLow], ['Dálková', l.lightsBeamHigh],
+    ['Majáky', l.lightsBeacon], ['Výstražná', l.lightsHazard, 'blink'], ['Stěrače', l.wipers],
+    ['Motorová brzda', l.motorBrake], ['Uzávěrka', l.differentialLock], ['Zvednutá náprava', l.liftAxle],
+    ['Parkovací brzda', l.parkBrake, 'alert'],
+  ];
+  $('bl').classList.toggle('on', !!l.blinkerLeftOn);
+  $('br').classList.toggle('on', !!l.blinkerRightOn);
+  $('chips').innerHTML = chips.map(([t, on, k]) => `<span class="chip${on ? (k === 'alert' ? ' alert' : ' on') : ''}${on && k === 'blink' ? ' blink' : ''}">${t}</span>`).join('');
+  const fp = v.fuelCap ? v.fuel / v.fuelCap * 100 : 0, ap = v.adblueCap ? v.adblue / v.adblueCap * 100 : 0;
+  $('fuel').style.width = fp + '%'; $('fuelbar').className = 'bar' + (v.warn.fuelWarning ? ' bad' : fp < 25 ? ' warn' : '');
+  $('fuelTxt').textContent = `${nf(v.fuel)} l / ${nf(fp)} %`;
+  $('ad').style.width = ap + '%'; $('adbar').className = 'bar' + (v.warn.adblueWarning ? ' bad' : '');
+  $('adTxt').textContent = `${nf(v.adblue)} l`;
+  $('range').textContent = `${nf(v.fuelRange)} km`;
+  // palubní počítač hry občas vynuluje průměr (hodnota 0), pak ukážeme průměr z relace
+  const avg = v.fuelAvg > 0.5 ? v.fuelAvg : (v.stats && v.stats.km > 20 ? v.stats.avg_l100 : null);
+  $('avg').textContent = avg ? `${nf(avg, 1)} l/100 km` : '–';
+  $('odo').textContent = `${nf(v.odo)} km`;
+  const w = v.warn;
+  $('gauges').innerHTML = [
+    ['Olej', `${nf(v.oilTemp)} °C`, false], ['Voda', `${nf(v.waterTemp)} °C`, w.waterTemperatureWarning],
+    ['Brzdy', `${nf(v.brakeTemp)} °C`, v.brakeTemp > 250], ['Vzduch', `${nf(v.air)} psi`, w.airPressureWarning],
+    ['Tlak oleje', `${nf(v.oilPress)} psi`, w.oilPressureWarning], ['Baterie', `${nf(v.battery, 1)} V`, w.batteryVoltageWarning],
+  ].map(([k, val, a]) => `<div class="${a ? 'alert' : ''}">${val}<small>${k}</small></div>`).join('');
+
+  // zakázka
+  if (j) {
+    $('cargo').innerHTML = `${j.cargo || '–'}<small>${nf(j.mass / 1000, 1)} t${j.plannedKm ? `, trasa ${nf(j.plannedKm)} km` : ''}${j.special ? ', speciální přeprava' : ''}</small>`;
+    $('pay').innerHTML = `${money(j.income)}<small>${j.plannedKm ? `${nf(j.income * rate / j.plannedKm)} Kč/km` : ''}</small>`;
+    const dl = j.deadlineMin;
+    $('deadline').innerHTML = dl == null ? 'bez termínu'
+      : dl < 0 ? `<span class="neg">po termínu ${hmGame(-dl)}</span>`
+      : `${hmGame(dl)}<small>${hm(dl * 60 / v.scale)} reálně</small>`;
+    const b = v.plan ? v.plan.bufferMin : null;
+    $('bufferLbl').textContent = v.plan && v.plan.sleeps ? 'Rezerva bez spánku' : 'Rezerva';
+    $('buffer').innerHTML = b == null ? '–' : b < 0 ? `<span class="neg">nestihneš o ${hmGame(-b)}</span>` : hmGame(b);
+    $('cdmg').innerHTML = `<span class="${j.damage > 0.05 ? 'neg' : ''}">${nf(j.damage * 100, 1)} %</span>`;
+  } else {
+    $('cargo').innerHTML = 'Bez zakázky<small>Vezmi si práci na burze nebo z kontraktů</small>';
+    ['pay', 'deadline', 'buffer', 'cdmg'].forEach(id => $(id).textContent = '–');
+  }
+  const rest = v.rest;
+  $('rest').textContent = rest.gameMin > 0 ? hmGame(rest.gameMin) : 'Odpočiň si';
+  $('restReal').textContent = rest.gameMin > 0 ? `do povinné pauzy, reálně ${hm(rest.realS)}` : 'hrozí pokuta za jízdu bez odpočinku';
+  $('restbox').classList.toggle('soon', rest.gameMin > 0 && rest.gameMin <= REST_WARN_MIN);
+  $('restbox').classList.toggle('over', rest.gameMin <= 0);
+  const t = v.timeAbs;
+  $('gtime').textContent = `${DAYS[Math.floor(t / 1440) % 7]} ${String(Math.floor(t % 1440 / 60)).padStart(2, '0')}:${String(t % 60).padStart(2, '0')}`;
+  $('scale').textContent = v.curScale < v.scale ? `herní čas, ve městě 1 : ${nf(v.curScale)}` : 'herní čas';
+  const p = v.plan;
+  $('pSleep').innerHTML = (!p ? '–' : p.sleeps === 0 ? `<span class="pos">dojedeš bez spánku</span><small>${-p.shortMin < 60 ? Math.floor(-p.shortMin) + ' min' : hmGame(-p.shortMin)} herního času v záloze</small>`
+    : p.sleeps === 1 && p.shortMin <= 60 ? `<span class="warn-t">těsně, chybí ${Math.ceil(p.shortMin)} min</span>`
+    : `<span class="warn-t">${p.sleeps}× spánek cestou</span>`);
+  $('pFuel').innerHTML = !p ? '–' : p.fuelOk ? '<span class="pos">stačí do cíle</span>'
+    : `<span class="warn-t">natankuj do ${nf(p.fuelRange)} km</span>`;
+  $('vehSec').classList.toggle('flash', !!v.damageFlash);
+  showDelivery(v.delivery);
+
+  // vůz
+  $('truckName').innerHTML = `${v.truck.name}<small>${v.truck.plate}</small>`;
+  wearRows($('twear'), v.truck.wear);
+  if (v.trailer) { $('trName').textContent = v.trailer.name || 'Návěs'; wearRows($('trwear'), v.trailer.wear); }
+  else { $('trName').textContent = 'Bez návěsu'; $('trwear').innerHTML = ''; }
+}
+
+function renderStats(s) {
+  const sd = new Date(s.since * 1000), today = sd.toDateString() === new Date().toDateString();
+  $('since').textContent = `Relace od ${today ? '' : sd.toLocaleDateString('cs-CZ', { day: 'numeric', month: 'numeric' }) + ' '}${clock(s.since)}`;
+  $('sKm').innerHTML = `${nf(s.km)}<small>km najeto</small>`;
+  $('sTime').innerHTML = `${hm(s.drive_s)}<small>za volantem</small>`;
+  $('sNet').innerHTML = `<span class="${s.net < 0 ? 'neg' : ''}">${money(s.net)}</span><small>čistý zisk</small>`;
+  const rows = [
+    ['Zakázky', `${s.jobs_ok}×`, money(s.income)],
+    ['Pokuty', `${s.fines_n}×`, money(-s.fines_sum)],
+    ['Mýtné', `${s.tolls_n}×`, money(-s.tolls_sum)],
+    ['Trajekty, vlaky', `${s.transport_n}×`, money(-s.transport_sum)],
+    ['Zisk za hodinu', s.per_hour == null || !s.jobs_ok ? '–' : money(s.per_hour), ''],
+    ['Spotřebováno', `${nf(s.fuel_l)} l`, s.km > 20 && s.avg_l100 ? `${nf(s.avg_l100, 1)} l/100 km` : ''],
+    ['Průměr', s.avg_kmh ? `${nf(s.avg_kmh)} km/h` : '–', `max. ${nf(s.max_kmh)} km/h`],
+    ['Nad limitem', hm(s.speeding_s), s.drive_s > 60 ? `${nf(s.speeding_s / s.drive_s * 100)} % jízdy` : ''],
+  ];
+  $('srows').innerHTML = rows.map(([k, a, b]) => `<dt>${k}</dt><dd><span style="white-space:nowrap">${a}</span>${b ? `<small>${b}</small>` : ''}</dd>`).join('');
+  $('log').innerHTML = s.log.length ? s.log.map(e => `<li><time>${clock(e.t)}</time><span class="${{ fine: 'fine', job: 'job', dmg: 'dmg' }[e.kind] || ''}">${e.text}</span><span>${e.amount == null ? '' : money(e.kind === 'job' ? e.amount : -e.amount)}</span></li>`).join('')
+    : '<li class="empty">Pokuty, mýtné a doručení se objeví tady.</li>';
+}
+
+// potvrzení přímo v tlačítku (systémový confirm() se ve fullscreenu na druhém monitoru schová)
+let armed = null;
+$('reset').onclick = async () => {
+  const b = $('reset');
+  if (!armed) {
+    b.textContent = 'Opravdu vynulovat?'; b.classList.add('armed');
+    armed = setTimeout(() => { armed = null; b.textContent = 'Nová relace'; b.classList.remove('armed'); }, 3000);
+    return;
+  }
+  clearTimeout(armed); armed = null;
+  b.textContent = 'Nová relace'; b.classList.remove('armed');
+  await fetch('/api/reset', { method: 'POST', headers: { 'X-Dash': '1' } });
+};
+document.addEventListener('keydown', e => {
+  if (e.key === 'f' || e.key === 'F') document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen();
+  if (e.key === 'h' || e.key === 'H') $('history').hidden ? openHistory() : ($('history').hidden = true);
+  if (e.key === 'Escape') { $('history').hidden = true; closeDelivery(); }
+});
+
+// ---------- souhrn po doručení ----------
+let shownDelivery = null, closedDelivery = null;
+function showDelivery(d) {
+  if (!d || d.t === closedDelivery) { if (!d) $('delivery').hidden = true; return; }
+  if (d.t === shownDelivery && !$('delivery').hidden) return;
+  shownDelivery = d.t;
+  $('dTitle').textContent = d.ok ? 'Zakázka doručena' : 'Zakázka zrušena';
+  $('dTitle').parentElement.classList.toggle('cancel', !d.ok);
+  $('dRoute').textContent = `${d.from} → ${d.to}`;
+  $('dRev').textContent = money(d.revenue);
+  $('dXp').textContent = d.xp != null ? `${nf(d.xp)} XP` : '–';
+  $('dKm').textContent = d.km ? `${nf(d.km)} km` : '–';
+  $('dDmg').textContent = d.damage != null ? `${nf(d.damage * 100, 1)} %` : '–';
+  $('delivery').hidden = false;
+}
+function closeDelivery() { closedDelivery = shownDelivery; $('delivery').hidden = true; }
+$('delivery').onclick = closeDelivery;
+
+// ---------- historie ----------
+async function openHistory() {
+  const h = await (await fetch('/api/history')).json();
+  const r = h.rate, kc = v => `${nf(Math.round(v * r) || 0)} Kč`;
+  const t = h.totals;
+  $('hTotals').innerHTML = [
+    [`${t.ok}×`, 'doručených zakázek'], [kc(t.revenue), 'celkový výdělek'], [`${nf(t.km)} km`, 'najeto se zakázkou'],
+    [t.km ? `${nf(t.revenue * r / t.km)} Kč` : '–', 'průměr na km'],
+    [h.best ? `${h.best.src} → ${h.best.dst}` : '–', h.best ? `nejlepší zakázka, ${nf(h.best.revenue * r / h.best.km)} Kč/km` : 'nejlepší zakázka'],
+  ].map(([a, b]) => `<div>${a}<small>${b}</small></div>`).join('');
+  const max = Math.max(1, ...h.days.map(d => d.revenue));
+  $('hDays').innerHTML = h.days.length ? h.days.map(d => {
+    const [y, m, dd] = d.day.split('-');
+    return `<div class="day" title="${d.n} zakázek, ${nf(d.km)} km"><em>${nf(d.revenue * r / 1000)}k</em><i style="height:${Math.max(0, d.revenue) / max * 85}%"></i><span>${+dd}. ${+m}.</span></div>`;
+  }).join('') : '<p class="empty">Zatím žádná doručená zakázka. Po prvním doručení se tu objeví graf.</p>';
+  $('hJobs').innerHTML = '<tr><th>Kdy</th><th>Trasa</th><th>Náklad</th><th class="r">Km</th><th class="r">Výdělek</th><th class="r">Kč/km</th><th class="r">Poškození</th></tr>' +
+    h.jobs.map(j => {
+      const km = j.driven_km > 0 ? j.driven_km : j.planned_km;
+      const when = new Date(j.ts * 1000).toLocaleString('cs-CZ', { day: 'numeric', month: 'numeric', hour: '2-digit', minute: '2-digit' });
+      return `<tr class="${j.ok ? '' : 'bad'}"><td>${when}</td><td>${j.src} → ${j.dst}</td><td>${j.cargo}</td><td class="r">${nf(km)}</td><td class="r">${kc(j.revenue)}</td><td class="r">${j.ok && km ? nf(j.revenue * r / km) : '–'}</td><td class="r">${j.ok ? nf(j.damage * 100, 1) + ' %' : 'zrušeno'}</td></tr>`;
+    }).join('');
+  $('history').hidden = false;
+}
+$('histBtn').onclick = openHistory;
+$('histClose').onclick = () => { $('history').hidden = true; };
+
+// reálné hodiny běží nezávisle na hře
+const tickClock = () => { $('rtime').textContent = new Date().toLocaleTimeString('cs-CZ', { hour: '2-digit', minute: '2-digit' }); };
+tickClock(); setInterval(tickClock, 1000);
+
+function connect() {
+  const es = new EventSource('/events');
+  es.onmessage = e => render(JSON.parse(e.data));
+  es.onerror = () => { document.body.classList.add('offline'); };
+}
+connect();
+</script>
+</body>
+</html>

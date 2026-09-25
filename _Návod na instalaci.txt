@@ -1,0 +1,18 @@
+1. Stáhni a nainstaluj Python (3.9+ minimálne) https://www.python.org/downloads/
+   
+    1a) Pri instalaci Python zaškrtnout „Add python.exe to PATH".
+    
+2. Zkopíruj scs-telemetry.dll ze složky \Install files do:
+ 
+    2a) Složka plugin neexistuje, musíš ji vytvorit
+    
+    <tvoje_cesta>\SteamLibrary\steamapps\common\Euro Truck Simulator 2\bin\win_x64\plugins\
+    <tvoje_cesta>\steamapps\common\American Truck Simulator\bin\win_x64\plugins\ 
+
+3. Spust dashboard pres dashboard-start.bat
+4. Zapni hru, vše se už synchronizuje samo
+
+        =============== EXTRA TIP ===============
+==== Automatické spouštení dashboardu pri startu hry ====
+1. Otevri Steam a klikni pravým na vlastnosti hry
+2. Do launch parameters vlož: "<cesta, kde máš dashboard>\game-start.bat" %command% 
