@@ -1,0 +1,11 @@
+{
+  "lang": "cs",
+  "ets2": {
+    "currency": "CZK",
+    "rate": 24.4945
+  },
+  "ats": {
+    "currency": "USD",
+    "rate": 1.0
+  }
+}

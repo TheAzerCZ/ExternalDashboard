@@ -10,7 +10,8 @@ Spuštění:
     python dash.py              # jen localhost
     python dash.py --demo       # simulovaná data bez hry (na odzkoušení UI)
     python dash.py --lan        # zpřístupní i v LAN (tablet/mobil) - volitelné
-    python dash.py --rate 24.5  # vlastní kurz EUR -> CZK (výchozí je herní 24,4945)
+
+Jazyk, měna a kurz se nastavují v dashboardu (ikona ozubeného kola) a ukládají do config.json.
 """
 
 import argparse
@@ -25,9 +26,51 @@ import sys
 import threading
 import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from urllib.parse import parse_qs, urlparse
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 STATS_FILE = os.path.join(HERE, "session.json")
+CONFIG_FILE = os.path.join(HERE, "config.json")
+CURRENCIES = ("CZK", "EUR", "USD", "GBP", "PLN")
+DEFAULT_CONFIG = {
+    "lang": "cs",
+    "ets2": {"currency": "CZK", "rate": 24.4945},   # ETS2 počítá v eurech; 24,4945 = kurz, který používá hra
+    "ats": {"currency": "USD", "rate": 1.0},        # ATS počítá v dolarech
+}
+
+
+def load_config():
+    cfg = json.loads(json.dumps(DEFAULT_CONFIG))
+    try:
+        with open(CONFIG_FILE, encoding="utf-8") as f:
+            user = json.load(f)
+        if user.get("lang") in ("cs", "en"):
+            cfg["lang"] = user["lang"]
+        for g in ("ets2", "ats"):
+            u = user.get(g) or {}
+            if u.get("currency") in CURRENCIES:
+                cfg[g]["currency"] = u["currency"]
+            if isinstance(u.get("rate"), (int, float)) and 0 < u["rate"] < 100000:
+                cfg[g]["rate"] = float(u["rate"])
+    except (OSError, ValueError, AttributeError):
+        pass
+    return cfg
+
+
+def validate_config(user):
+    """Vrátí očištěnou konfiguraci, nebo None, když je vstup nesmyslný."""
+    try:
+        cfg = {"lang": user["lang"]}
+        if cfg["lang"] not in ("cs", "en"):
+            return None
+        for g in ("ets2", "ats"):
+            cur, rate = user[g]["currency"], float(user[g]["rate"])
+            if cur not in CURRENCIES or not 0 < rate < 100000:
+                return None
+            cfg[g] = {"currency": cur, "rate": rate}
+        return cfg
+    except (KeyError, TypeError, ValueError):
+        return None
 HISTORY_DB = os.path.join(HERE, "history.db")
 DRIVE_AFTER_SLEEP_MIN = 11 * 60  # po vyspání má řidič v ETS2 11 h herního času jízdy
 MAP_NAME = "Local\\SCSTelemetry"
@@ -294,14 +337,6 @@ class DemoSource:
 # --------------------------------------------------------------------------
 #  Statistiky relace + události
 # --------------------------------------------------------------------------
-OFFENCES = {
-    "crash": "Nehoda", "avoid_sleeping": "Jízda bez odpočinku", "wrong_way": "Jízda v protisměru",
-    "speeding_camera": "Radar", "speeding": "Překročení rychlosti", "no_lights": "Jízda bez světel",
-    "red_signal": "Jízda na červenou", "avoid_weighing": "Vyhnutí se vážení",
-    "illegal_trailer": "Nepovolený návěs", "avoid_inspection": "Vyhnutí se kontrole",
-    "illegal_border_crossing": "Nelegální přejezd hranice", "hard_shoulder_violation": "Jízda po krajnici",
-    "damaged_vehicle_usage": "Poškozené vozidlo", "generic": "Pokuta",
-}
 
 
 def fresh_stats():
@@ -313,8 +348,10 @@ def fresh_stats():
 class Processor:
     FLAGS = ("fined", "tollgate", "ferry", "train", "jobDelivered", "jobCancelled")
 
-    def __init__(self, source, eur_czk, usd_czk=21.0, auto_reset=True):
-        self.src, self.rate, self.usd, self.auto_reset = source, eur_czk, usd_czk, auto_reset
+    def __init__(self, source, auto_reset=True):
+        self.src, self.auto_reset = source, auto_reset
+        self.config = load_config()
+        self.last_game = "ETS2"
         self.lock = threading.Lock()
         self.game_exited = threading.Event()
         self.stats = self._load()
@@ -357,25 +394,34 @@ class Processor:
             self.stats = fresh_stats()
             self.save()
 
-    def _log(self, kind, text, amount=None):
-        self.stats["log"].insert(0, {"t": time.time(), "kind": kind, "text": text, "amount": amount})
+    def set_config(self, cfg):
+        with self.lock:
+            self.config = cfg
+            try:
+                with open(CONFIG_FILE, "w", encoding="utf-8") as f:
+                    json.dump(cfg, f, ensure_ascii=False, indent=2)
+            except OSError as e:
+                print("Nepodařilo se uložit config.json:", e)
+
+    def _log(self, kind, amount=None, **params):
+        # texty se skládají až v prohlížeči podle zvoleného jazyka
+        self.stats["log"].insert(0, {"t": time.time(), "kind": kind, "amount": amount, **params})
         del self.stats["log"][40:]
 
     def _fire(self, flag, d):
         s = self.stats
         if flag == "fined":
-            name = OFFENCES.get(d["fineOffence"], d["fineOffence"] or "Pokuta")
-            s["fines"].append({"what": name, "amount": d["fineAmount"]})
-            self._log("fine", name, d["fineAmount"])
+            s["fines"].append({"offence": d["fineOffence"], "amount": d["fineAmount"]})
+            self._log("fine", d["fineAmount"], offence=d["fineOffence"])
         elif flag == "tollgate":
             s["tolls_n"] += 1
             s["tolls_sum"] += d["tollgatePayAmount"]
-            self._log("toll", "Mýtná brána", d["tollgatePayAmount"])
+            self._log("toll", d["tollgatePayAmount"])
         elif flag in ("ferry", "train"):
             a = d[f"{flag}PayAmount"]
-            text = f'{"Trajekt" if flag == "ferry" else "Vlak"} {d[flag + "SourceName"]} – {d[flag + "TargetName"]}'
-            s["transport"].append({"kind": flag, "text": text, "amount": a})
-            self._log(flag, text, a)
+            src, dst = d[flag + "SourceName"], d[flag + "TargetName"]
+            s["transport"].append({"kind": flag, "src": src, "dst": dst, "amount": a})
+            self._log(flag, a, src=src, dst=dst)
         elif flag == "jobDelivered":
             j = self.last_job
             job = {"ok": True, "from": j.get("citySrc", "?"), "to": j.get("cityDst", "?"),
@@ -383,7 +429,7 @@ class Processor:
                    "xp": d["jobDeliveredEarnedXp"], "km": round(d["jobDeliveredDistanceKm"]),
                    "damage": d["jobDeliveredCargoDamage"], "t": time.time()}
             s["jobs"].insert(0, job)
-            self._log("job", f'Doručeno: {job["from"]} → {job["to"]}', job["revenue"])
+            self._log("job", job["revenue"], src=job["from"], dst=job["to"])
             self._store(d, j, True, d["jobDeliveredRevenue"])
             self.delivery = {**job, "t": time.time(), "plannedKm": j.get("plannedDistanceKm", 0),
                              "autopark": d["jobDeliveredAutoparkUsed"]}
@@ -392,7 +438,7 @@ class Processor:
             s["jobs"].insert(0, {"ok": False, "from": j.get("citySrc", "?"), "to": j.get("cityDst", "?"),
                                  "cargo": j.get("cargo", ""), "revenue": -d["jobCancelledPenalty"],
                                  "t": time.time()})
-            self._log("cancel", "Zakázka zrušena", d["jobCancelledPenalty"])
+            self._log("cancel", d["jobCancelledPenalty"])
             self._store(d, j, False, -d["jobCancelledPenalty"])
 
     def _store(self, d, j, ok, revenue):
@@ -410,22 +456,24 @@ class Processor:
         except sqlite3.Error as e:
             print("Nepodařilo se uložit zakázku do historie:", e)
 
-    def history(self):
+    def history(self, game):
+        game = game if game in ("ETS2", "ATS") else self.last_game
         with self.lock:
             cur = self.db.cursor()
-            jobs = [dict(zip([c[0] for c in cur.description], r)) for r in
-                    cur.execute("SELECT * FROM jobs ORDER BY ts DESC LIMIT 25").fetchall()]
+            rows = cur.execute("SELECT * FROM jobs WHERE game = ? ORDER BY ts DESC LIMIT 25", (game,)).fetchall()
+            jobs = [dict(zip([c[0] for c in cur.description], r)) for r in rows]
+            games = [r[0] for r in cur.execute("SELECT DISTINCT game FROM jobs").fetchall()]
             days = [dict(zip(("day", "n", "revenue", "km"), r)) for r in cur.execute(
                 "SELECT date(ts, 'unixepoch', 'localtime') d, COUNT(*), SUM(revenue),"
                 " SUM(CASE WHEN driven_km > 0 THEN driven_km ELSE planned_km END)"
-                " FROM jobs GROUP BY d ORDER BY d DESC LIMIT 14").fetchall()]
+                " FROM jobs WHERE game = ? GROUP BY d ORDER BY d DESC LIMIT 14", (game,)).fetchall()]
             t = cur.execute("SELECT COUNT(*), SUM(ok), SUM(revenue), SUM(CASE WHEN ok THEN"
                             " (CASE WHEN driven_km > 0 THEN driven_km ELSE planned_km END) END),"
-                            " SUM(xp), MIN(ts) FROM jobs").fetchone()
+                            " SUM(xp), MIN(ts) FROM jobs WHERE game = ?", (game,)).fetchone()
             best = cur.execute("SELECT src, dst, revenue, planned_km FROM jobs WHERE ok AND planned_km > 0"
-                               " ORDER BY revenue / planned_km DESC LIMIT 1").fetchone()
+                               " AND game = ? ORDER BY revenue / planned_km DESC LIMIT 1", (game,)).fetchone()
             return json.dumps({
-                "rate": self.rate, "jobs": jobs, "days": days[::-1],
+                "game": game, "games": games, "settings": self.config, "jobs": jobs, "days": days[::-1],
                 "totals": {"n": t[0] or 0, "ok": t[1] or 0, "revenue": t[2] or 0, "km": t[3] or 0,
                            "xp": t[4] or 0, "since": t[5]},
                 "best": dict(zip(("src", "dst", "revenue", "km"), best)) if best else None,
@@ -453,7 +501,7 @@ class Processor:
                 t = d.get("time", 0)
                 if self.auto_reset and (self.stats.get("game_over") or t < self.stats.get("last_time", 0)):
                     self.stats = fresh_stats()
-                    self._log("info", "Hra spuštěna, nová relace")
+                    self._log("newSession")
                 self.stats["game_over"] = False
                 self.prev = d  # po (re)startu hry nevyhodnocujeme přepnuté příznaky
             self.stats["last_time"] = d.get("time", 0)
@@ -493,10 +541,10 @@ class Processor:
             if now - self.last_save > 30 or self.pending:
                 self.save(); self.last_save = now
 
-    DAMAGE_PARTS = (("Motor", "wearEngine"), ("Převodovka", "wearTransmission"), ("Kabina", "wearCabin"),
-                    ("Podvozek", "wearChassis"), ("Kola", "wearWheels"), ("Náklad", "cargoDamage"))
-    TRAILER_PARTS = (("Návěs – podvozek", "trailerWearChassis"), ("Návěs – kola", "trailerWearWheels"),
-                     ("Návěs – nástavba", "trailerWearBody"))
+    DAMAGE_PARTS = (("engine", "wearEngine"), ("transmission", "wearTransmission"), ("cabin", "wearCabin"),
+                    ("chassis", "wearChassis"), ("wheels", "wearWheels"), ("cargo", "cargoDamage"))
+    TRAILER_PARTS = (("trailerChassis", "trailerWearChassis"), ("trailerWheels", "trailerWearWheels"),
+                     ("trailerBody", "trailerWearBody"))
 
     def _check_damage(self, d, now):
         """Náraz = skokový nárůst poškození. Běžné opotřebení roste nepatrně, to ignorujeme."""
@@ -517,8 +565,7 @@ class Processor:
             big = {n: v for n, v in self.dmg_acc.items() if v >= 0.002}
             self.dmg_acc = {}
             if big and self.dmg_t:
-                txt = ", ".join(f"{n} +{v * 100:.1f} %".replace(".", ",") for n, v in big.items())
-                self._log("dmg", f"Poškození: {txt}")
+                self._log("dmg", parts=[[n, v] for n, v in big.items()])
                 self.last_damage = now
             self.dmg_t = 0.0
 
@@ -540,10 +587,11 @@ class Processor:
             "net": income - fines - s["tolls_sum"] - transport,
             "per_hour": (income - fines - s["tolls_sum"] - transport) / (s["drive_s"] / 3600)
             if s["drive_s"] > 600 else None,
-            "jobs": s["jobs"][:6], "log": s["log"][:12], "rate": self.rate,
+            "jobs": s["jobs"][:6], "log": s["log"][:12], "game": self.last_game,
         }
 
     def _build(self, d):
+        self.last_game = {1: "ETS2", 2: "ATS"}.get(d["game"], self.last_game)
         cur_scale = d["scale"] if d["scale"] > 0 else 19.0
         # Ve městech hra zpomaluje čas na 1:3. Pro přepočet dlouhých časů (ETA, termín, pauza)
         # proto bereme "silniční" měřítko: nejvyšší viděné v této herní relaci, dokud jsme
@@ -559,7 +607,7 @@ class Processor:
         return {
             "connected": True, "paused": d["paused"],
             "game": {1: "ETS2", 2: "ATS"}.get(d["game"], "?"),
-            "rate": self.usd if d["game"] == 2 else self.rate,
+
             "timeAbs": d["timeAbs"], "scale": scale, "curScale": cur_scale,
             "speed": abs(d["speed"]) * 3.6, "limit": d["speedLimit"] * 3.6,
             "cruise": d["cruiseControlSpeed"] * 3.6 if d["cruiseControl"] else None,
@@ -581,11 +629,11 @@ class Processor:
             if route_ok else None,
             "rest": {"gameMin": d["restStop"], "realS": d["restStop"] * 60 / scale},
             "truck": {"name": f'{d["truckBrand"]} {d["truckName"]}'.strip(), "plate": d["truckLicensePlate"],
-                      "wear": {"Motor": d["wearEngine"], "Převodovka": d["wearTransmission"],
-                               "Kabina": d["wearCabin"], "Podvozek": d["wearChassis"], "Kola": d["wearWheels"]}},
+                      "wear": {"engine": d["wearEngine"], "transmission": d["wearTransmission"],
+                               "cabin": d["wearCabin"], "chassis": d["wearChassis"], "wheels": d["wearWheels"]}},
             "trailer": {"name": f'{d["trailerBrand"]} {d["trailerName"]}'.strip(),
-                        "wear": {"Podvozek": d["trailerWearChassis"], "Kola": d["trailerWearWheels"],
-                                 "Nástavba": d["trailerWearBody"]}} if d["trailerAttached"] else None,
+                        "wear": {"chassis": d["trailerWearChassis"], "wheels": d["trailerWearWheels"],
+                                 "body": d["trailerWearBody"]}} if d["trailerAttached"] else None,
             "job": {"from": d["citySrc"], "to": d["cityDst"], "compFrom": d["compSrc"], "compTo": d["compDst"],
                     "cargo": d["cargo"], "mass": d["cargoMass"], "income": d["jobIncome"],
                     "damage": d["cargoDamage"], "plannedKm": d["plannedDistanceKm"],
@@ -614,7 +662,7 @@ class Processor:
 
     def snapshot(self):
         with self.lock:
-            return json.dumps(self.view, ensure_ascii=False)
+            return json.dumps({**self.view, "settings": self.config}, ensure_ascii=False)
 
 
 # --------------------------------------------------------------------------
@@ -644,8 +692,9 @@ def make_handler(proc, allow_lan):
                 self.send_header("Cache-Control", "no-store")
                 self.end_headers()
                 self.wfile.write(body)
-            elif self.path == "/api/history":
-                body = proc.history().encode()
+            elif self.path.split("?")[0] == "/api/history":
+                q = parse_qs(urlparse(self.path).query)
+                body = proc.history(q.get("game", [""])[0]).encode()
                 self.send_response(200)
                 self.send_header("Content-Type", "application/json; charset=utf-8")
                 self.send_header("Cache-Control", "no-store")
@@ -674,6 +723,17 @@ def make_handler(proc, allow_lan):
                 proc.reset()
                 self.send_response(204)
                 self.end_headers()
+            elif self.path == "/api/settings":
+                try:
+                    n = min(int(self.headers.get("Content-Length", 0)), 4096)
+                    cfg = validate_config(json.loads(self.rfile.read(n) or b"{}"))
+                except ValueError:
+                    cfg = None
+                if cfg is None:
+                    return self.send_error(400)
+                proc.set_config(cfg)
+                self.send_response(204)
+                self.end_headers()
             else:
                 self.send_error(404)
 
@@ -690,14 +750,12 @@ def main():
     ap.add_argument("--port", type=int, default=8088)
     ap.add_argument("--lan", action="store_true", help="naslouchat na všech rozhraních (jinak jen 127.0.0.1)")
     ap.add_argument("--demo", action="store_true", help="simulovaná data bez hry")
-    ap.add_argument("--rate", type=float, default=24.4945, help="kurz EUR→CZK (výchozí = kurz, který používá ETS2)")
-    ap.add_argument("--usd", type=float, default=21.0, help="kurz USD→CZK (ATS)")
     ap.add_argument("--exit-with-game", action="store_true", help="ukončit dashboard po zavření hry")
     ap.add_argument("--keep", action="store_true", help="nenulovat statistiky při novém spuštění hry")
     a = ap.parse_args()
 
     src = DemoSource() if a.demo else SharedMemorySource()
-    proc = Processor(src, a.rate, a.usd, auto_reset=not a.keep)
+    proc = Processor(src, auto_reset=not a.keep)
 
     def loop():
         while True:
