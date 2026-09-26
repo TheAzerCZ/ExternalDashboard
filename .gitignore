@@ -1,0 +1,10 @@
+# osobni data dashboardu
+session.json
+session.json.tmp
+history.db
+config.json
+dash.log
+
+# Python
+__pycache__/
+*.pyc
