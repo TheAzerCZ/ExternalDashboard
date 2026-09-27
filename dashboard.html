@@ -187,6 +187,7 @@
   #hJobs tr.bad td { color: #ff5a52; }
   .neg { color: var(--amber); }
   .warn-t { color: var(--amber); }
+  .muted-t { color: var(--muted); }
   .pos { color: var(--green); }
   .head { display: flex; justify-content: space-between; align-items: baseline; }
   button { font: inherit; font-size: calc(var(--u)*1.1); color: var(--muted); background: none; border: 1px solid var(--line); border-radius: 99px; padding: calc(var(--u)*.25) calc(var(--u)*.9); cursor: pointer; }
@@ -370,16 +371,16 @@ const I18N = {
     restFine: 'hrozí pokuta za jízdu bez odpočinku', toDest: 'Do cíle', fuelLbl: 'Palivo',
     noSleep: 'dojedeš bez spánku', spare: '{t} herního času v záloze', tight: 'těsně, chybí {m} min',
     sleeps: '{n}× spánek cestou', fuelOk: 'stačí do cíle', refuel: 'natankuj do {km} km',
-    gameTime: 'herní čas', gameTimeCity: 'herní čas, ve městě 1 : {s}', realTime: 'reálný čas',
+    gameTime: 'herní čas', realTime: 'reálný čas',
     job: 'Zakázka', deadline: 'Termín doručení', buffer: 'Rezerva', bufferNoSleep: 'Rezerva bez spánku',
     cargoDmg: 'Poškození nákladu', cargoDmgLower: 'poškození nákladu', route: 'trasa {km} km', special: 'speciální přeprava',
-    noJobHint: 'Vezmi si práci na burze nebo z kontraktů', noDeadline: 'bez termínu', late: 'po termínu {t}',
+    noJobHint: 'Vezmi si práci na burze nebo z kontraktů', noDeadline: 'bez termínu', deadlineUnknown: 'hra ho neposílá', late: 'po termínu {t}',
     realSuffix: '{t} reálně', wontMake: 'nestihneš o {t}',
     vehicle: 'Vůz', noTrailer: 'Bez návěsu', trailer: 'Návěs', odo: 'Tachometr',
     engine: 'Motor', transmission: 'Převodovka', cabin: 'Kabina', chassis: 'Podvozek', wheels: 'Kola', body: 'Nástavba',
     cargo: 'Náklad', trailerChassis: 'Návěs – podvozek', trailerWheels: 'Návěs – kola', trailerBody: 'Návěs – nástavba',
     oil: 'Olej', water: 'Voda', brakes: 'Brzdy', air: 'Vzduch', oilPress: 'Tlak oleje', battery: 'Baterie',
-    session: 'Relace', sessionSince: 'Relace od {t}', history: 'Historie', historyTip: 'Historie zakázek (klávesa H)',
+    session: 'Relace', sessionSince: 'Od {t}', history: 'Historie', historyTip: 'Historie zakázek (klávesa H)',
     newSession: 'Nová relace', newSessionTip: 'Vynuluje statistiky relace', confirmReset: 'Opravdu vynulovat?',
     kmDriven: 'km najeto', atWheel: 'za volantem', netProfit: 'čistý zisk',
     jobs: 'Zakázky', fines: 'Pokuty', tolls: 'Mýtné', transport: 'Trajekty, vlaky', perHour: 'Zisk za hodinu',
@@ -419,10 +420,10 @@ const I18N = {
     restFine: 'you risk a fine for driving without rest', toDest: 'To destination', fuelLbl: 'Fuel',
     noSleep: 'no sleep needed', spare: '{t} of game time to spare', tight: 'close call, {m} min short',
     sleeps: '{n}× sleep on the way', fuelOk: 'enough to destination', refuel: 'refuel within {km} km',
-    gameTime: 'game time', gameTimeCity: 'game time, city 1 : {s}', realTime: 'real time',
+    gameTime: 'game time', realTime: 'real time',
     job: 'Job', deadline: 'Deadline', buffer: 'Time buffer', bufferNoSleep: 'Buffer, excl. sleep',
     cargoDmg: 'Cargo damage', cargoDmgLower: 'cargo damage', route: 'route {km} km', special: 'special transport',
-    noJobHint: 'Take a job from the freight market or contracts', noDeadline: 'no deadline', late: 'late by {t}',
+    noJobHint: 'Take a job from the freight market or contracts', noDeadline: 'no deadline', deadlineUnknown: 'not provided by the game', late: 'late by {t}',
     realSuffix: '{t} real time', wontMake: 'late by {t}',
     vehicle: 'Vehicle', noTrailer: 'No trailer', trailer: 'Trailer', odo: 'Odometer',
     engine: 'Engine', transmission: 'Transmission', cabin: 'Cabin', chassis: 'Chassis', wheels: 'Wheels', body: 'Body',
@@ -584,7 +585,7 @@ function render(v) {
     $('cargo').innerHTML = `${j.cargo || '–'}<small>${sub}</small>`;
     $('pay').innerHTML = `${money(j.income)}<small>${j.plannedKm ? money(j.income / j.plannedKm, gameKey, curOf(gameKey).currency === 'CZK' ? 0 : 2) + '/km' : ''}</small>`;
     const dl = j.deadlineMin;
-    $('deadline').innerHTML = dl == null ? t('noDeadline')
+    $('deadline').innerHTML = j.deadlineUnknown ? `<span class="muted-t">${t('deadlineUnknown')}</span>` : dl == null ? t('noDeadline')
       : dl < 0 ? `<span class="neg">${t('late', { t: hmGame(-dl) })}</span>`
       : `${hmGame(dl)}<small>${t('realSuffix', { t: hm(dl * 60 / v.scale) })}</small>`;
     const b = v.plan ? v.plan.bufferMin : null;
@@ -602,7 +603,7 @@ function render(v) {
   $('restbox').classList.toggle('soon', rest.gameMin > 0 && rest.gameMin <= REST_WARN_MIN);
   $('restbox').classList.toggle('over', rest.gameMin <= 0);
   $('gtime').textContent = gameClock(v.timeAbs);
-  $('scale').textContent = v.curScale < v.scale ? t('gameTimeCity', { s: nf(v.curScale) }) : t('gameTime');
+  $('scale').textContent = t('gameTime');
   const p = v.plan;
   const spare = p && -p.shortMin < 60 ? `${Math.floor(-p.shortMin)} min` : p ? hmGame(-p.shortMin) : '';
   $('pSleep').innerHTML = !p ? '–' : p.sleeps === 0 ? `<span class="pos">${t('noSleep')}</span><small>${t('spare', { t: spare })}</small>`

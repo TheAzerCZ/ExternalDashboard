@@ -602,6 +602,11 @@ class Processor:
         route_ok = d["routeDistance"] > 50
         real_eta = d["routeTime"] / scale if route_ok else None
         deadline = d["timeAbsDelivery"] - d["timeAbs"] if d["onJob"] and not d["specialJob"] else None
+        # U externích zakázek hra termín do SDK neposílá a místo něj dá maximální hodnotu
+        # (~71 milionů hodin). Takový "termín" zahodíme a frontend ukáže, že ho hra neposílá.
+        deadline_unknown = deadline is not None and (d["timeAbsDelivery"] >= 0xFFFFFF00 or deadline > 60 * 24 * 365)
+        if deadline_unknown:
+            deadline = None
         g = d["gearDashboard"]
         gear = "N" if g == 0 else (f"R{-g}" if g < 0 else str(g))
         return {
@@ -637,7 +642,7 @@ class Processor:
             "job": {"from": d["citySrc"], "to": d["cityDst"], "compFrom": d["compSrc"], "compTo": d["compDst"],
                     "cargo": d["cargo"], "mass": d["cargoMass"], "income": d["jobIncome"],
                     "damage": d["cargoDamage"], "plannedKm": d["plannedDistanceKm"],
-                    "deadlineMin": deadline, "special": d["specialJob"], "market": d["jobMarket"]}
+                    "deadlineMin": deadline, "deadlineUnknown": deadline_unknown, "special": d["specialJob"], "market": d["jobMarket"]}
             if d["onJob"] else None,
             "stats": self._stats_view(d),
             "plan": self._plan(d, route_ok, deadline),
