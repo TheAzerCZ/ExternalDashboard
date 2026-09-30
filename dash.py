@@ -30,6 +30,7 @@ from urllib.parse import parse_qs, urlparse
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 STATS_FILE = os.path.join(HERE, "session.json")
+JOB_FILE = os.path.join(HERE, "job_progress.json")
 CONFIG_FILE = os.path.join(HERE, "config.json")
 CURRENCIES = ("CZK", "EUR", "USD", "GBP", "PLN")
 DEFAULT_CONFIG = {
@@ -170,6 +171,9 @@ def parse(buf):
     for k in ("differentialLock", "liftAxle", "liftAxleIndicator", "trailerLiftAxle",
               "trailerLiftAxleIndicator", "jobDeliveredAutoparkUsed", "jobDeliveredAutoloadUsed"):
         d[k] = r.bool()
+    # zóna 6 - zrychlení kamionu v jeho souřadnicích (m/s²): X doprava, Y nahoru, Z dozadu
+    r.at(1892)
+    d["accX"], d["accY"], d["accZ"] = r.float(), r.float(), r.float()
     # zóna 9 - řetězce
     r.at(2300)
     for k in ("truckBrandId", "truckBrand", "truckId", "truckName", "cargoId", "cargo",
@@ -272,7 +276,7 @@ class DemoSource:
         self.next_event = time.time() + 6
         self.last = time.time()
         self.cab = 0.10
-        self.delivered_at = time.time() + 25
+        self.delivered_at = time.time() + 130
 
     def read(self):
         now = time.time()
@@ -295,6 +299,7 @@ class DemoSource:
             self.flags["jobDelivered"] = not self.flags["jobDelivered"]
         d = {
             "sdkActive": True, "paused": False, "game": 1, "scale": 19.0, "time": int(el * 1e6),
+            "accX": 3.4 if int(el) % 17 == 0 else 0.4, "accY": 0.0, "accZ": 3.9 if int(el) % 23 == 0 else 0.2,
             "timeAbs": 6 * 1440 + 12 * 60 + 15 + int(el * 19 / 60),
             "timeAbsDelivery": 6 * 1440 + 12 * 60 + 15 + 40 * 60 + 54,
             "restStop": max(0, 272 - int(el * 19 / 60)),
@@ -367,7 +372,12 @@ class Processor:
             id INTEGER PRIMARY KEY, ts REAL, game TEXT, ok INTEGER, src TEXT, dst TEXT,
             comp_src TEXT, comp_dst TEXT, cargo TEXT, mass REAL, planned_km REAL, driven_km REAL,
             revenue REAL, xp INTEGER, damage REAL, market TEXT)""")
+        cols = {r[1] for r in self.db.execute("PRAGMA table_info(jobs)")}
+        for c, typ in (("score", "INTEGER"), ("style", "TEXT")):
+            if c not in cols:
+                self.db.execute(f"ALTER TABLE jobs ADD COLUMN {c} {typ}")
         self.db.commit()
+        self.style = self._load_style()
         self.last_tick = time.time()
         self.last_save = time.time()
 
@@ -430,9 +440,10 @@ class Processor:
                    "damage": d["jobDeliveredCargoDamage"], "t": time.time()}
             s["jobs"].insert(0, job)
             self._log("job", job["revenue"], src=job["from"], dst=job["to"])
-            self._store(d, j, True, d["jobDeliveredRevenue"])
+            style = self._finish_style(j)
+            self._store(d, j, True, d["jobDeliveredRevenue"], style)
             self.delivery = {**job, "t": time.time(), "plannedKm": j.get("plannedDistanceKm", 0),
-                             "autopark": d["jobDeliveredAutoparkUsed"]}
+                             "autopark": d["jobDeliveredAutoparkUsed"], "style": style}
         elif flag == "jobCancelled":
             j = self.last_job
             s["jobs"].insert(0, {"ok": False, "from": j.get("citySrc", "?"), "to": j.get("cityDst", "?"),
@@ -440,18 +451,20 @@ class Processor:
                                  "t": time.time()})
             self._log("cancel", d["jobCancelledPenalty"])
             self._store(d, j, False, -d["jobCancelledPenalty"])
+            self._finish_style(j)
 
-    def _store(self, d, j, ok, revenue):
+    def _store(self, d, j, ok, revenue, style=None):
         try:
             self.db.execute(
                 "INSERT INTO jobs (ts, game, ok, src, dst, comp_src, comp_dst, cargo, mass, planned_km,"
-                " driven_km, revenue, xp, damage, market) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                " driven_km, revenue, xp, damage, market, score, style) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
                 (time.time(), {1: "ETS2", 2: "ATS"}.get(d["game"], "?"), int(ok), j.get("citySrc", "?"),
                  j.get("cityDst", "?"), j.get("compSrc", ""), j.get("compDst", ""), j.get("cargo", ""),
                  j.get("cargoMass", 0), j.get("plannedDistanceKm", 0),
                  d["jobDeliveredDistanceKm"] if ok else 0, revenue,
                  d["jobDeliveredEarnedXp"] if ok else 0, d["jobDeliveredCargoDamage"] if ok else 0,
-                 j.get("jobMarket", "")))
+                 j.get("jobMarket", ""), style["score"] if style else None,
+                 json.dumps(style) if style else None))
             self.db.commit()
         except sqlite3.Error as e:
             print("Nepodařilo se uložit zakázku do historie:", e)
@@ -513,6 +526,7 @@ class Processor:
                                                    "cargoMass", "plannedDistanceKm", "jobMarket")}
             if not d["paused"]:
                 self._check_damage(d, now)
+                self._track_style(d, dt, now)
 
             # průběžné statistiky
             if not d["paused"]:
@@ -539,7 +553,77 @@ class Processor:
             self.prev = d
             self.view = self._build(d)
             if now - self.last_save > 30 or self.pending:
-                self.save(); self.last_save = now
+                self.save(); self._save_style(); self.last_save = now
+
+    # ---------- hodnocení stylu jízdy (per zakázka, přežije restart hry) ----------
+    BRAKE_MS2 = 3.5     # prudké brzdění: zpomalení nad ~0,36 g
+    CORNER_MS2 = 3.0    # ostrá zatáčka: boční zrychlení nad ~0,3 g
+    SPIKE_MS2 = 15.0    # víc už je náraz, ne brzdění/zatáčka (nárazy počítá detekce poškození)
+    HOLD_S = 0.3        # jev musí trvat aspoň tolik, aby ho nezpůsobil jeden hrbol
+    COOLDOWN_S = 3.0
+
+    @staticmethod
+    def _job_key(d):
+        return "|".join(str(d[k]) for k in ("citySrc", "cityDst", "compSrc", "compDst", "cargo", "jobIncome"))
+
+    def _load_style(self):
+        try:
+            with open(JOB_FILE, encoding="utf-8") as f:
+                return json.load(f)
+        except (OSError, ValueError):
+            return None
+
+    def _save_style(self):
+        try:
+            if self.style:
+                with open(JOB_FILE, "w", encoding="utf-8") as f:
+                    json.dump(self.style, f)
+            elif os.path.exists(JOB_FILE):
+                os.remove(JOB_FILE)
+        except OSError:
+            pass
+
+    def _track_style(self, d, dt, now):
+        if not d["onJob"] or not d["cityDst"]:
+            return
+        key = self._job_key(d)
+        if not self.style or self.style.get("key") != key:
+            # jiná zakázka než ta rozjetá -> začínáme znovu
+            self.style = {"key": key, "drive_s": 0.0, "speeding_s": 0.0, "brakes": 0, "corners": 0, "hits": 0,
+                          "_b": 0.0, "_c": 0.0, "_bt": 0.0, "_ct": 0.0}
+            self._save_style()
+        st = self.style
+        kmh = abs(d["speed"]) * 3.6
+        if kmh < 3 or dt > 1:
+            st["_b"] = st["_c"] = 0.0
+            return
+        st["drive_s"] += dt
+        if d["speedLimit"] > 0 and kmh > d["speedLimit"] * 3.6 + 5:
+            st["speeding_s"] += dt
+        decel, lateral = d["accZ"], abs(d["accX"])   # Z míří dozadu -> kladné = brzdění při jízdě vpřed
+        if d["speed"] < 0:
+            decel = -decel
+        for kind, val, thr in (("b", decel, self.BRAKE_MS2), ("c", lateral, self.CORNER_MS2)):
+            if thr < val < self.SPIKE_MS2:
+                st["_" + kind] += dt
+                if st["_" + kind] >= self.HOLD_S and now - st["_" + kind + "t"] > self.COOLDOWN_S:
+                    st["brakes" if kind == "b" else "corners"] += 1
+                    st["_" + kind + "t"] = now
+            else:
+                st["_" + kind] = 0.0
+
+    def _finish_style(self, j):
+        """Uzavře hodnocení právě skončené zakázky a vrátí souhrn (nebo None)."""
+        st, self.style = self.style, None
+        self._save_style()
+        if not st or st["drive_s"] < 120:
+            return None   # dashboard viděl z jízdy moc málo na férové hodnocení
+        hours = st["drive_s"] / 3600
+        speeding_pct = st["speeding_s"] / st["drive_s"] * 100
+        # srážky za události vážené na hodinu jízdy, aby dlouhé trasy nebyly znevýhodněné
+        penalty = (st["brakes"] * 4 + st["corners"] * 3) / max(hours, 0.25) + st["hits"] * 6 + speeding_pct * 0.5
+        return {"score": max(0, min(100, round(100 - penalty))), "brakes": st["brakes"], "corners": st["corners"],
+                "hits": st["hits"], "speeding": round(speeding_pct), "drive_s": round(st["drive_s"])}
 
     DAMAGE_PARTS = (("engine", "wearEngine"), ("transmission", "wearTransmission"), ("cabin", "wearCabin"),
                     ("chassis", "wearChassis"), ("wheels", "wearWheels"), ("cargo", "cargoDamage"))
@@ -566,6 +650,8 @@ class Processor:
             self.dmg_acc = {}
             if big and self.dmg_t:
                 self._log("dmg", parts=[[n, v] for n, v in big.items()])
+                if self.style:
+                    self.style["hits"] += 1
                 self.last_damage = now
             self.dmg_t = 0.0
 

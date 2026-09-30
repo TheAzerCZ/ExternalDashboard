@@ -165,6 +165,15 @@
   .dgrid { display: grid; grid-template-columns: 1.5fr 1fr 1fr 1fr; gap: calc(var(--u)*1.5); }
   .dgrid b { display: block; white-space: nowrap; font-size: calc(var(--u)*2.6); font-weight: 600; }
   .dgrid small, .dhint { color: var(--muted); font-size: calc(var(--u)*1.2); }
+  .dstyle { display: flex; align-items: center; gap: calc(var(--u)*1.6); border-top: 1px solid var(--line); padding-top: calc(var(--u)*1.6); }
+  .dstyle[hidden] { display: none; }
+  .dscore { width: calc(var(--u)*8); height: calc(var(--u)*8); border-radius: 50%; border: calc(var(--u)*.5) solid var(--green); display: grid; place-content: center; text-align: center; flex: none; }
+  .dscore b { font-size: calc(var(--u)*3.2); font-weight: 600; line-height: 1; }
+  .dscore small { font-size: calc(var(--u)*1); color: var(--muted); }
+  .dscore.mid { border-color: var(--amber); } .dscore.low { border-color: #ff5a52; }
+  .dstyle strong { display: block; font-size: calc(var(--u)*2.2); font-weight: 600; }
+  .dstyle span { color: var(--muted); font-size: calc(var(--u)*1.35); }
+  .sc-hi { color: var(--green); } .sc-mid { color: var(--amber); } .sc-low { color: #ff5a52; }
   /* historie */
   .hwrap { background: var(--road-2); border-radius: calc(var(--u)*1); padding: calc(var(--u)*2); width: 94vw; height: 90vh; display: flex; flex-direction: column; gap: calc(var(--u)*1.6); overflow: hidden; }
   .hwrap h1 { font-size: calc(var(--u)*2.6); font-weight: 600; }
@@ -321,6 +330,10 @@
     <div><b id="dKm">–</b><small data-i18n="driven"></small></div>
     <div><b id="dDmg">–</b><small data-i18n="cargoDmgLower"></small></div>
   </div>
+  <div class="dstyle" id="dStyle" hidden>
+    <div class="dscore"><b id="dScore">–</b><small>/ 100</small></div>
+    <div><strong id="dGrade"></strong><span id="dStyleTxt"></span></div>
+  </div>
   <small class="dhint" data-i18n="clickClose"></small>
 </div></div>
 
@@ -391,6 +404,8 @@ const I18N = {
     logNewSession: 'Hra spuštěna, nová relace',
     delivered: 'Zakázka doručena', cancelled: 'Zakázka zrušena', revenue: 'výdělek', xp: 'zkušenosti', driven: 'najeto',
     clickClose: 'Klikni kamkoliv pro zavření',
+    styleDetail: '{b}× prudké brzdění, {c}× ostrá zatáčka, {h}× náraz, {s} % jízdy nad limitem',
+    grades: ['Pirát silnic', 'Ujde to', 'Spolehlivý řidič', 'Vzorný řidič'], thStyle: 'Styl',
     histHeading: 'Historie zakázek', close: 'Zavřít (Esc)', perDay: 'Výdělek po dnech', lastJobs: 'Poslední zakázky',
     hDelivered: 'doručených zakázek', hRevenue: 'celkový výdělek', hKm: 'najeto se zakázkou', hPerKm: 'průměr na km',
     hBest: 'nejlepší zakázka', hBestPer: 'nejlepší zakázka, {v}/km', hEmpty: 'Zatím žádná doručená zakázka. Po prvním doručení se tu objeví graf.',
@@ -440,6 +455,8 @@ const I18N = {
     logNewSession: 'Game started, new session',
     delivered: 'Job delivered', cancelled: 'Job cancelled', revenue: 'revenue', xp: 'experience', driven: 'driven',
     clickClose: 'Click anywhere to close',
+    styleDetail: '{b}× hard braking, {c}× sharp turn, {h}× collision, {s} % of driving over the limit',
+    grades: ['Road pirate', 'Could be better', 'Reliable driver', 'Model driver'], thStyle: 'Style',
     histHeading: 'Job history', close: 'Close (Esc)', perDay: 'Earnings per day', lastJobs: 'Recent jobs',
     hDelivered: 'jobs delivered', hRevenue: 'total revenue', hKm: 'km driven on jobs', hPerKm: 'average per km',
     hBest: 'best job', hBestPer: 'best job, {v}/km', hEmpty: 'No delivered jobs yet. The chart will appear after your first delivery.',
@@ -690,8 +707,17 @@ function showDelivery(d) {
   $('dXp').textContent = d.xp != null ? `${nf(d.xp)} XP` : '–';
   $('dKm').textContent = d.km ? `${nf(d.km)} km` : '–';
   $('dDmg').textContent = d.damage != null ? `${nf(d.damage * 100, 1)} %` : '–';
+  const st = d.style;
+  $('dStyle').hidden = !st;
+  if (st) {
+    $('dScore').textContent = st.score;
+    $('dScore').parentElement.className = 'dscore' + (st.score >= 75 ? '' : st.score >= 50 ? ' mid' : ' low');
+    $('dGrade').textContent = gradeOf(st.score);
+    $('dStyleTxt').textContent = t('styleDetail', { b: st.brakes, c: st.corners, h: st.hits, s: st.speeding });
+  }
   $('delivery').hidden = false;
 }
+const gradeOf = sc => t('grades')[sc >= 90 ? 3 : sc >= 75 ? 2 : sc >= 50 ? 1 : 0];
 function closeDelivery() { closedDelivery = shownDelivery; $('delivery').hidden = true; }
 $('delivery').onclick = closeDelivery;
 
@@ -717,11 +743,11 @@ async function openHistory(game) {
     const label = lang === 'en' ? `${+dd}/${+mo}` : `${+dd}. ${+mo}.`;
     return `<div class="day" title="${t('hDayTip', { n: d.n, km: nf(d.km) })}"><em>${compact.format(d.revenue * curOf(g).rate)}</em><i style="height:${Math.max(0, d.revenue) / max * 85}%"></i><span>${label}</span></div>`;
   }).join('') : `<p class="empty">${t('hEmpty')}</p>`;
-  $('hJobs').innerHTML = `<tr><th>${t('thWhen')}</th><th>${t('thRoute')}</th><th>${t('thCargo')}</th><th class="r">km</th><th class="r">${t('thRevenue')}</th><th class="r">${t('thPerKm', { c: curSym(g) })}</th><th class="r">${t('thDamage')}</th></tr>` +
+  $('hJobs').innerHTML = `<tr><th>${t('thWhen')}</th><th>${t('thRoute')}</th><th>${t('thCargo')}</th><th class="r">km</th><th class="r">${t('thRevenue')}</th><th class="r">${t('thPerKm', { c: curSym(g) })}</th><th class="r">${t('thDamage')}</th><th class="r">${t('thStyle')}</th></tr>` +
     h.jobs.map(j => {
       const km = j.driven_km > 0 ? j.driven_km : j.planned_km;
       const when = new Date(j.ts * 1000).toLocaleString(locale, { day: 'numeric', month: 'numeric', hour: '2-digit', minute: '2-digit' });
-      return `<tr class="${j.ok ? '' : 'bad'}"><td>${when}</td><td>${j.src} → ${j.dst}</td><td>${j.cargo}</td><td class="r">${nf(km)}</td><td class="r">${m(j.revenue)}</td><td class="r">${j.ok && km ? nf(j.revenue * curOf(g).rate / km, perKmDigits) : '–'}</td><td class="r">${j.ok ? nf(j.damage * 100, 1) + ' %' : t('hCancelled')}</td></tr>`;
+      return `<tr class="${j.ok ? '' : 'bad'}"><td>${when}</td><td>${j.src} → ${j.dst}</td><td>${j.cargo}</td><td class="r">${nf(km)}</td><td class="r">${m(j.revenue)}</td><td class="r">${j.ok && km ? nf(j.revenue * curOf(g).rate / km, perKmDigits) : '–'}</td><td class="r">${j.ok ? nf(j.damage * 100, 1) + ' %' : t('hCancelled')}</td><td class="r">${j.score == null ? '–' : `<span class="${j.score >= 75 ? 'sc-hi' : j.score >= 50 ? 'sc-mid' : 'sc-low'}" title="${gradeOf(j.score)}">${j.score}</span>`}</td></tr>`;
     }).join('');
   $('history').hidden = false;
 }
