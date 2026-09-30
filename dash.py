@@ -35,8 +35,8 @@ CONFIG_FILE = os.path.join(HERE, "config.json")
 CURRENCIES = ("CZK", "EUR", "USD", "GBP", "PLN")
 DEFAULT_CONFIG = {
     "lang": "cs",
-    "ets2": {"currency": "CZK", "rate": 24.4945},   # ETS2 počítá v eurech; 24,4945 = kurz, který používá hra
-    "ats": {"currency": "USD", "rate": 1.0},        # ATS počítá v dolarech
+    "ets2": {"currency": "CZK", "rate": 24.4945, "units": "metric"},  # ETS2 počítá v eurech; 24,4945 = herní kurz
+    "ats": {"currency": "USD", "rate": 1.0, "units": "imperial"},     # ATS počítá v dolarech
 }
 
 
@@ -53,6 +53,8 @@ def load_config():
                 cfg[g]["currency"] = u["currency"]
             if isinstance(u.get("rate"), (int, float)) and 0 < u["rate"] < 100000:
                 cfg[g]["rate"] = float(u["rate"])
+            if u.get("units") in ("metric", "imperial"):
+                cfg[g]["units"] = u["units"]
     except (OSError, ValueError, AttributeError):
         pass
     return cfg
@@ -65,10 +67,10 @@ def validate_config(user):
         if cfg["lang"] not in ("cs", "en"):
             return None
         for g in ("ets2", "ats"):
-            cur, rate = user[g]["currency"], float(user[g]["rate"])
-            if cur not in CURRENCIES or not 0 < rate < 100000:
+            cur, rate, units = user[g]["currency"], float(user[g]["rate"]), user[g]["units"]
+            if cur not in CURRENCIES or not 0 < rate < 100000 or units not in ("metric", "imperial"):
                 return None
-            cfg[g] = {"currency": cur, "rate": rate}
+            cfg[g] = {"currency": cur, "rate": rate, "units": units}
         return cfg
     except (KeyError, TypeError, ValueError):
         return None

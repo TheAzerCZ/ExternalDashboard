@@ -86,6 +86,9 @@
     border: calc(var(--u)*.95) solid var(--red); color: #111; display: grid; place-items: center;
     font-size: calc(var(--u)*3.1); font-weight: 700; font-stretch: 87.5%; flex: none;
   }
+  .limit.us { border-radius: calc(var(--u)*.6); border: calc(var(--u)*.35) solid #111; box-shadow: 0 0 0 calc(var(--u)*.25) var(--white);
+    width: calc(var(--u)*6.2); height: calc(var(--u)*7.8); display: flex; flex-direction: column; align-items: center; justify-content: center; line-height: 1; font-size: calc(var(--u)*3.4); }
+  .limit.us small { font-size: calc(var(--u)*1.05); font-weight: 700; letter-spacing: .04em; text-align: center; margin-bottom: calc(var(--u)*.4); line-height: 1.05; }
   .limit.none { background: transparent; border-color: var(--line); color: var(--muted); font-size: calc(var(--u)*1.3); font-weight: 400; }
   .over .num { color: var(--amber); }
   .gearbox { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: calc(var(--u)*1.2); }
@@ -354,10 +357,12 @@
   <fieldset><legend>Euro Truck Simulator 2</legend>
     <div class="srow"><span data-i18n="currency"></span><select id="sEtsCur"></select></div>
     <div class="srow"><span data-i18n="rate"></span><span>1 € =</span><input id="sEtsRate" type="number" step="any" min="0"><span id="sEtsUnit"></span></div>
+    <div class="srow"><span data-i18n="units"></span><select id="sEtsUnits"><option value="metric" data-i18n="metric"></option><option value="imperial" data-i18n="imperial"></option></select></div>
   </fieldset>
   <fieldset><legend>American Truck Simulator</legend>
     <div class="srow"><span data-i18n="currency"></span><select id="sAtsCur"></select></div>
     <div class="srow"><span data-i18n="rate"></span><span>1 $ =</span><input id="sAtsRate" type="number" step="any" min="0"><span id="sAtsUnit"></span></div>
+    <div class="srow"><span data-i18n="units"></span><select id="sAtsUnits"><option value="metric" data-i18n="metric"></option><option value="imperial" data-i18n="imperial"></option></select></div>
   </fieldset>
   <p class="shint" data-i18n="rateHint"></p>
   <div class="sbtns"><button id="sCancel" data-i18n="cancel"></button><button id="sSave" class="primary" data-i18n="save"></button></div>
@@ -375,7 +380,7 @@ const I18N = {
     paused: 'Hra je pozastavená', noJob: 'Bez zakázky', navigation: 'Navigace', customRoute: 'Vlastní trasa',
     left: 'zbývá', real: 'reálně', arrivalReal: 'příjezd v reálném čase',
     gameLeft: '{t} herně', gameArrival: '{t} ve hře', routePct: '{p} % trasy',
-    drive: 'Jízda', cruiseOn: 'tempomat {v} km/h', cruiseOff: 'tempomat vyp.', noLimit: 'bez limitu',
+    drive: 'Jízda', cruiseOn: 'tempomat {v}', cruiseOff: 'tempomat vyp.', noLimit: 'bez limitu',
     rpm: '{v} ot./min', retarder: 'retardér {a}/{b}',
     lowBeam: 'Potkávací', highBeam: 'Dálková', beacon: 'Majáky', hazard: 'Výstražná', wipers: 'Stěrače',
     engineBrake: 'Motorová brzda', diffLock: 'Uzávěrka', liftAxle: 'Zvednutá náprava', parkBrake: 'Parkovací brzda',
@@ -383,10 +388,10 @@ const I18N = {
     restPlan: 'Odpočinek a plán', untilRest: 'do povinné pauzy, reálně {t}', restNow: 'Odpočiň si',
     restFine: 'hrozí pokuta za jízdu bez odpočinku', toDest: 'Do cíle', fuelLbl: 'Palivo',
     noSleep: 'dojedeš bez spánku', spare: '{t} herního času v záloze', tight: 'těsně, chybí {m} min',
-    sleeps: '{n}× spánek cestou', fuelOk: 'stačí do cíle', refuel: 'natankuj do {km} km',
+    sleeps: '{n}× spánek cestou', fuelOk: 'stačí do cíle', refuel: 'natankuj do {d}',
     gameTime: 'herní čas', realTime: 'reálný čas',
     job: 'Zakázka', deadline: 'Termín doručení', buffer: 'Rezerva', bufferNoSleep: 'Rezerva bez spánku',
-    cargoDmg: 'Poškození nákladu', cargoDmgLower: 'poškození nákladu', route: 'trasa {km} km', special: 'speciální přeprava',
+    cargoDmg: 'Poškození nákladu', cargoDmgLower: 'poškození nákladu', route: 'trasa {d}', special: 'speciální přeprava',
     noJobHint: 'Vezmi si práci na burze nebo z kontraktů', noDeadline: 'bez termínu', deadlineUnknown: 'hra ho neposílá', late: 'po termínu {t}',
     realSuffix: '{t} reálně', wontMake: 'nestihneš o {t}',
     vehicle: 'Vůz', noTrailer: 'Bez návěsu', trailer: 'Návěs', odo: 'Tachometr',
@@ -395,9 +400,9 @@ const I18N = {
     oil: 'Olej', water: 'Voda', brakes: 'Brzdy', air: 'Vzduch', oilPress: 'Tlak oleje', battery: 'Baterie',
     session: 'Relace', sessionSince: 'Od {t}', history: 'Historie', historyTip: 'Historie zakázek (klávesa H)',
     newSession: 'Nová relace', newSessionTip: 'Vynuluje statistiky relace', confirmReset: 'Opravdu vynulovat?',
-    kmDriven: 'km najeto', atWheel: 'za volantem', netProfit: 'čistý zisk',
+    kmDriven: '{u} najeto', atWheel: 'za volantem', netProfit: 'čistý zisk',
     jobs: 'Zakázky', fines: 'Pokuty', tolls: 'Mýtné', transport: 'Trajekty, vlaky', perHour: 'Zisk za hodinu',
-    fuelUsed: 'Spotřebováno', avgSpeed: 'Průměr', maxSpeed: 'max. {v} km/h', overLimit: 'Nad limitem', ofDriving: '{p} % jízdy',
+    fuelUsed: 'Spotřebováno', avgSpeed: 'Průměr', maxSpeed: 'max. {v}', overLimit: 'Nad limitem', ofDriving: '{p} % jízdy',
     logEmpty: 'Pokuty, mýtné a doručení se objeví tady.',
     logToll: 'Mýtná brána', logFerry: 'Trajekt {src} – {dst}', logTrain: 'Vlak {src} – {dst}',
     logJob: 'Doručeno: {src} → {dst}', logCancel: 'Zakázka zrušena', logDmg: 'Poškození: {parts}',
@@ -407,10 +412,10 @@ const I18N = {
     styleDetail: '{b}× prudké brzdění, {c}× ostrá zatáčka, {h}× náraz, {s} % jízdy nad limitem',
     grades: ['Pirát silnic', 'Ujde to', 'Spolehlivý řidič', 'Vzorný řidič'], thStyle: 'Styl',
     histHeading: 'Historie zakázek', close: 'Zavřít (Esc)', perDay: 'Výdělek po dnech', lastJobs: 'Poslední zakázky',
-    hDelivered: 'doručených zakázek', hRevenue: 'celkový výdělek', hKm: 'najeto se zakázkou', hPerKm: 'průměr na km',
-    hBest: 'nejlepší zakázka', hBestPer: 'nejlepší zakázka, {v}/km', hEmpty: 'Zatím žádná doručená zakázka. Po prvním doručení se tu objeví graf.',
-    hDayTip: '{n} zakázek, {km} km', thWhen: 'Kdy', thRoute: 'Trasa', thCargo: 'Náklad', thRevenue: 'Výdělek',
-    thPerKm: '{c}/km', thDamage: 'Poškození', hCancelled: 'zrušeno',
+    hDelivered: 'doručených zakázek', hRevenue: 'celkový výdělek', hKm: 'najeto se zakázkou', units: 'Jednotky', metric: 'Metrické (km, l, °C)', imperial: 'Imperiální (mi, gal, °F)', speedLimit: 'rychlost', hPerKm: 'průměr na {u}',
+    hBest: 'nejlepší zakázka', hBestPer: 'nejlepší zakázka, {v}/{u}', hEmpty: 'Zatím žádná doručená zakázka. Po prvním doručení se tu objeví graf.',
+    hDayTip: '{n} zakázek, {d}', thWhen: 'Kdy', thRoute: 'Trasa', thCargo: 'Náklad', thRevenue: 'Výdělek',
+    thPerKm: '{c}/{u}', thDamage: 'Poškození', hCancelled: 'zrušeno',
     settings: 'Nastavení', language: 'Jazyk', currency: 'Měna', rate: 'Kurz', save: 'Uložit', cancel: 'Zrušit',
     rateHint: 'ETS2 počítá v eurech a ATS v dolarech, dashboard částky jen přepočítává. Výchozí kurz koruny (24,4945) je stejný, jaký používá ETS2. Ostatní výchozí kurzy jsou přibližné, klidně si je uprav.',
     waiting: 'Čekám na hru',
@@ -426,7 +431,7 @@ const I18N = {
     paused: 'Game paused', noJob: 'No job', navigation: 'Navigation', customRoute: 'Custom route',
     left: 'remaining', real: 'real time', arrivalReal: 'arrival, real time',
     gameLeft: '{t} in game', gameArrival: '{t} in game', routePct: '{p} % of route',
-    drive: 'Driving', cruiseOn: 'cruise {v} km/h', cruiseOff: 'cruise off', noLimit: 'no limit',
+    drive: 'Driving', cruiseOn: 'cruise {v}', cruiseOff: 'cruise off', noLimit: 'no limit',
     rpm: '{v} rpm', retarder: 'retarder {a}/{b}',
     lowBeam: 'Low beam', highBeam: 'High beam', beacon: 'Beacons', hazard: 'Hazards', wipers: 'Wipers',
     engineBrake: 'Engine brake', diffLock: 'Diff lock', liftAxle: 'Lift axle', parkBrake: 'Parking brake',
@@ -434,10 +439,10 @@ const I18N = {
     restPlan: 'Rest & plan', untilRest: 'until mandatory rest, {t} real', restNow: 'Take a rest',
     restFine: 'you risk a fine for driving without rest', toDest: 'To destination', fuelLbl: 'Fuel',
     noSleep: 'no sleep needed', spare: '{t} of game time to spare', tight: 'close call, {m} min short',
-    sleeps: '{n}× sleep on the way', fuelOk: 'enough to destination', refuel: 'refuel within {km} km',
+    sleeps: '{n}× sleep on the way', fuelOk: 'enough to destination', refuel: 'refuel within {d}',
     gameTime: 'game time', realTime: 'real time',
     job: 'Job', deadline: 'Deadline', buffer: 'Time buffer', bufferNoSleep: 'Buffer, excl. sleep',
-    cargoDmg: 'Cargo damage', cargoDmgLower: 'cargo damage', route: 'route {km} km', special: 'special transport',
+    cargoDmg: 'Cargo damage', cargoDmgLower: 'cargo damage', route: 'route {d}', special: 'special transport',
     noJobHint: 'Take a job from the freight market or contracts', noDeadline: 'no deadline', deadlineUnknown: 'not provided by the game', late: 'late by {t}',
     realSuffix: '{t} real time', wontMake: 'late by {t}',
     vehicle: 'Vehicle', noTrailer: 'No trailer', trailer: 'Trailer', odo: 'Odometer',
@@ -446,9 +451,9 @@ const I18N = {
     oil: 'Oil', water: 'Water', brakes: 'Brakes', air: 'Air', oilPress: 'Oil pressure', battery: 'Battery',
     session: 'Session', sessionSince: 'Since {t}', history: 'History', historyTip: 'Job history (H key)',
     newSession: 'New session', newSessionTip: 'Resets session statistics', confirmReset: 'Really reset?',
-    kmDriven: 'km driven', atWheel: 'at the wheel', netProfit: 'net profit',
+    kmDriven: '{u} driven', atWheel: 'at the wheel', netProfit: 'net profit',
     jobs: 'Jobs', fines: 'Fines', tolls: 'Tolls', transport: 'Ferries, trains', perHour: 'Profit per hour',
-    fuelUsed: 'Fuel used', avgSpeed: 'Avg speed', maxSpeed: 'max {v} km/h', overLimit: 'Over the limit', ofDriving: '{p} % of driving',
+    fuelUsed: 'Fuel used', avgSpeed: 'Avg speed', maxSpeed: 'max {v}', overLimit: 'Over the limit', ofDriving: '{p} % of driving',
     logEmpty: 'Fines, tolls and deliveries will show up here.',
     logToll: 'Toll gate', logFerry: 'Ferry {src} – {dst}', logTrain: 'Train {src} – {dst}',
     logJob: 'Delivered: {src} → {dst}', logCancel: 'Job cancelled', logDmg: 'Damage: {parts}',
@@ -458,10 +463,10 @@ const I18N = {
     styleDetail: '{b}× hard braking, {c}× sharp turn, {h}× collision, {s} % of driving over the limit',
     grades: ['Road pirate', 'Could be better', 'Reliable driver', 'Model driver'], thStyle: 'Style',
     histHeading: 'Job history', close: 'Close (Esc)', perDay: 'Earnings per day', lastJobs: 'Recent jobs',
-    hDelivered: 'jobs delivered', hRevenue: 'total revenue', hKm: 'km driven on jobs', hPerKm: 'average per km',
-    hBest: 'best job', hBestPer: 'best job, {v}/km', hEmpty: 'No delivered jobs yet. The chart will appear after your first delivery.',
-    hDayTip: '{n} jobs, {km} km', thWhen: 'When', thRoute: 'Route', thCargo: 'Cargo', thRevenue: 'Revenue',
-    thPerKm: '{c}/km', thDamage: 'Damage', hCancelled: 'cancelled',
+    hDelivered: 'jobs delivered', hRevenue: 'total revenue', hKm: 'driven on jobs', units: 'Units', metric: 'Metric (km, l, °C)', imperial: 'Imperial (mi, gal, °F)', speedLimit: 'speed', hPerKm: 'average per {u}',
+    hBest: 'best job', hBestPer: 'best job, {v}/{u}', hEmpty: 'No delivered jobs yet. The chart will appear after your first delivery.',
+    hDayTip: '{n} jobs, {d}', thWhen: 'When', thRoute: 'Route', thCargo: 'Cargo', thRevenue: 'Revenue',
+    thPerKm: '{c}/{u}', thDamage: 'Damage', hCancelled: 'cancelled',
     settings: 'Settings', language: 'Language', currency: 'Currency', rate: 'Rate', save: 'Save', cancel: 'Cancel',
     rateHint: 'ETS2 pays in euros and ATS in dollars; the dashboard only converts the amounts. The default CZK rate (24.4945) matches the one ETS2 uses. Other default rates are approximate, feel free to adjust them.',
     waiting: 'Waiting for the game',
@@ -481,7 +486,7 @@ const DEFAULT_RATES = {                        // výchozí kurzy při změně m
 };
 const CURRENCIES = ['CZK', 'EUR', 'USD', 'GBP', 'PLN'];
 
-let settings = { lang: 'cs', ets2: { currency: 'CZK', rate: 24.4945 }, ats: { currency: 'USD', rate: 1 } };
+let settings = { lang: 'cs', ets2: { currency: 'CZK', rate: 24.4945, units: 'metric' }, ats: { currency: 'USD', rate: 1, units: 'imperial' } };
 let lang = 'cs', locale = 'cs-CZ', gameKey = 'ets2', lastView = null;
 
 const t = (key, p = {}) => {
@@ -511,14 +516,28 @@ const hm = s => { if (s == null) return '–'; s = Math.max(0, Math.round(s / 60
 const hmGame = m => m == null ? '–' : `${Math.floor(m / 60)} h ${String(Math.floor(m % 60)).padStart(2, '0')} min`;
 const clock = ts => ts ? new Date(ts * 1000).toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' }) : '–';
 const gameClock = m => { m = Math.floor(m); return `${t('days')[Math.floor(m / 1440) % 7]} ${String(Math.floor(m % 1440 / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`; };
-const REST_WARN_MIN = 95;  // hra hlásí únavu cca 1 h 35 min před povinnou pauzou
+const REST_WARN_MIN = 95;
+
+// jednotky: SDK posílá metriku, pro imperiální režim převádíme (US galony, mpg, °F, libry)
+const KM2MI = 0.621371;
+const imp = (g = gameKey) => (settings[g] && settings[g].units) === 'imperial';
+const dU = (g = gameKey) => imp(g) ? 'mi' : 'km';
+const dist = (km, g = gameKey, d = 0) => `${nf(imp(g) ? km * KM2MI : km, d)} ${dU(g)}`;
+const spdN = (kmh, g = gameKey) => Math.round(imp(g) ? kmh * KM2MI : kmh);
+const sU = (g = gameKey) => imp(g) ? 'mph' : 'km/h';
+const spd = (kmh, g = gameKey) => `${nf(spdN(kmh, g))} ${sU(g)}`;
+const vol = (l, g = gameKey) => imp(g) ? `${nf(l * 0.264172)} gal` : `${nf(l)} l`;
+const cons = (l100, g = gameKey) => imp(g) ? `${nf(235.215 / l100, 1)} mpg` : `${nf(l100, 1)} l/100 km`;
+const temp = (c, g = gameKey) => imp(g) ? `${nf(c * 9 / 5 + 32)} °F` : `${nf(c)} °C`;
+const mass = (kg, g = gameKey) => imp(g) ? `${nf(kg * 2.20462)} lb` : `${nf(kg / 1000, 1)} t`;
+const perDist = (km, g = gameKey) => imp(g) ? km * KM2MI : km;   // pro přepočet peněz na km / míli  // hra hlásí únavu cca 1 h 35 min před povinnou pauzou
 
 // částky: hra posílá € (ETS2) nebo $ (ATS), převádíme podle nastavení dané hry
 const curOf = g => settings[g] || { currency: NATIVE[g], rate: 1 };
 const money = (v, g = gameKey, d = 0) => {
   if (v == null || isNaN(v)) return '–';
   const c = curOf(g), x = v * c.rate;
-  return new Intl.NumberFormat(locale, { style: 'currency', currency: c.currency, minimumFractionDigits: d, maximumFractionDigits: d }).format(Math.abs(x) < 0.5 && d === 0 ? 0 : x);
+  return new Intl.NumberFormat(locale, { style: 'currency', currency: c.currency, currencyDisplay: 'narrowSymbol', minimumFractionDigits: d, maximumFractionDigits: d }).format(Math.abs(x) < 0.5 && d === 0 ? 0 : x);
 };
 const curSym = g => new Intl.NumberFormat(locale, { style: 'currency', currency: curOf(g).currency, currencyDisplay: 'narrowSymbol' })
   .formatToParts(0).find(p => p.type === 'currency').value;
@@ -546,7 +565,7 @@ function render(v) {
   $('to').textContent = j ? j.to : (r ? t('customRoute') : t('noJob'));
   $('co').textContent = j ? `${j.compFrom} → ${j.compTo}` : '';
   $('sign').classList.toggle('no-route', !r);
-  $('dist').textContent = r ? `${nf(r.km)} km` : '–';
+  $('dist').textContent = r ? dist(r.km) : '–';
   $('real').textContent = r ? hm(r.realS) : '–';
   $('arr').textContent = r ? clock(r.arrival) : '–';
   $('realGame').textContent = r ? t('gameLeft', { t: hmGame(r.gameMin) }) : '';
@@ -557,13 +576,14 @@ function render(v) {
   if (pct != null) { $('done').style.width = pct + '%'; $('truck').style.left = pct + '%'; $('prog').title = t('routePct', { p: nf(pct) }); }
 
   // jízda
-  const spd = Math.round(v.speed), lim = Math.round(v.limit);
-  $('spd').textContent = spd;
-  $('speedbox').classList.toggle('over', lim > 0 && spd > lim + 2);
+  const sp = spdN(v.speed), lim = spdN(v.limit), us = imp();
+  $('spd').textContent = sp;
+  $('speedbox').classList.toggle('over', lim > 0 && sp > lim + (us ? 1 : 2));
   const L = $('lim');
-  L.className = lim > 0 ? 'limit' : 'limit none';
-  L.textContent = lim > 0 ? lim : t('noLimit');
-  $('cruiseTxt').textContent = v.cruise ? t('cruiseOn', { v: Math.round(v.cruise) }) : t('cruiseOff');
+  L.className = (lim > 0 ? 'limit' : 'limit none') + (us ? ' us' : '');
+  // v imperiálním režimu americká obdélníková značka SPEED LIMIT
+  L.innerHTML = lim > 0 ? (us ? `<small>SPEED<br>LIMIT</small>${lim}` : lim) : t('noLimit');
+  $('cruiseTxt').textContent = v.cruise ? t('cruiseOn', { v: spd(v.cruise) }) : t('cruiseOff');
   $('cruise').classList.toggle('on', !!v.cruise);
   $('gear').textContent = v.gear;
   $('retarder').textContent = t('rpm', { v: nf(v.rpm) }) + (v.retarderMax ? ', ' + t('retarder', { a: v.retarder, b: v.retarderMax }) : '');
@@ -581,26 +601,26 @@ function render(v) {
   $('chips').innerHTML = chips.map(([k, on, x]) => `<span class="chip${on ? (x === 'alert' ? ' alert' : ' on') : ''}${on && x === 'blink' ? ' blink' : ''}">${t(k)}</span>`).join('');
   const fp = v.fuelCap ? v.fuel / v.fuelCap * 100 : 0, ap = v.adblueCap ? v.adblue / v.adblueCap * 100 : 0;
   $('fuel').style.width = fp + '%'; $('fuelbar').className = 'bar' + (v.warn.fuelWarning ? ' bad' : fp < 25 ? ' warn' : '');
-  $('fuelTxt').textContent = `${nf(v.fuel)} l / ${nf(fp)} %`;
+  $('fuelTxt').textContent = `${vol(v.fuel)} / ${nf(fp)} %`;
   $('ad').style.width = ap + '%'; $('adbar').className = 'bar' + (v.warn.adblueWarning ? ' bad' : '');
-  $('adTxt').textContent = `${nf(v.adblue)} l`;
-  $('range').textContent = `${nf(v.fuelRange)} km`;
+  $('adTxt').textContent = vol(v.adblue);
+  $('range').textContent = dist(v.fuelRange);
   // palubní počítač hry občas vynuluje průměr (hodnota 0), pak ukážeme průměr z relace
   const avg = v.fuelAvg > 0.5 ? v.fuelAvg : (v.stats && v.stats.km > 20 ? v.stats.avg_l100 : null);
-  $('avg').textContent = avg ? `${nf(avg, 1)} l/100 km` : '–';
-  $('odo').textContent = `${nf(v.odo)} km`;
+  $('avg').textContent = avg ? cons(avg) : '–';
+  $('odo').textContent = dist(v.odo);
   const w = v.warn;
   $('gauges').innerHTML = [
-    ['oil', `${nf(v.oilTemp)} °C`, false], ['water', `${nf(v.waterTemp)} °C`, w.waterTemperatureWarning],
-    ['brakes', `${nf(v.brakeTemp)} °C`, v.brakeTemp > 250], ['air', `${nf(v.air)} psi`, w.airPressureWarning],
+    ['oil', temp(v.oilTemp), false], ['water', temp(v.waterTemp), w.waterTemperatureWarning],
+    ['brakes', temp(v.brakeTemp), v.brakeTemp > 250], ['air', `${nf(v.air)} psi`, w.airPressureWarning],
     ['oilPress', `${nf(v.oilPress)} psi`, w.oilPressureWarning], ['battery', `${nf(v.battery, 1)} V`, w.batteryVoltageWarning],
   ].map(([k, val, a]) => `<div class="${a ? 'alert' : ''}">${val}<small>${t(k)}</small></div>`).join('');
 
   // zakázka
   if (j) {
-    const sub = [`${nf(j.mass / 1000, 1)} t`, j.plannedKm ? t('route', { km: nf(j.plannedKm) }) : '', j.special ? t('special') : ''].filter(Boolean).join(', ');
+    const sub = [mass(j.mass), j.plannedKm ? t('route', { d: dist(j.plannedKm) }) : '', j.special ? t('special') : ''].filter(Boolean).join(', ');
     $('cargo').innerHTML = `${j.cargo || '–'}<small>${sub}</small>`;
-    $('pay').innerHTML = `${money(j.income)}<small>${j.plannedKm ? money(j.income / j.plannedKm, gameKey, curOf(gameKey).currency === 'CZK' ? 0 : 2) + '/km' : ''}</small>`;
+    $('pay').innerHTML = `${money(j.income)}<small>${j.plannedKm ? money(j.income / perDist(j.plannedKm), gameKey, curOf(gameKey).currency === 'CZK' ? 0 : 2) + '/' + dU() : ''}</small>`;
     const dl = j.deadlineMin;
     $('deadline').innerHTML = j.deadlineUnknown ? `<span class="muted-t">${t('deadlineUnknown')}</span>` : dl == null ? t('noDeadline')
       : dl < 0 ? `<span class="neg">${t('late', { t: hmGame(-dl) })}</span>`
@@ -627,7 +647,7 @@ function render(v) {
     : p.sleeps === 1 && p.shortMin <= 60 ? `<span class="warn-t">${t('tight', { m: Math.ceil(p.shortMin) })}</span>`
     : `<span class="warn-t">${t('sleeps', { n: p.sleeps })}</span>`;
   $('pFuel').innerHTML = !p ? '–' : p.fuelOk ? `<span class="pos">${t('fuelOk')}</span>`
-    : `<span class="warn-t">${t('refuel', { km: nf(p.fuelRange) })}</span>`;
+    : `<span class="warn-t">${t('refuel', { d: dist(p.fuelRange) })}</span>`;
   $('vehSec').classList.toggle('flash', !!v.damageFlash);
   showDelivery(v.delivery);
 
@@ -656,7 +676,7 @@ function logText(e) {
 function renderStats(s) {
   const sd = new Date(s.since * 1000), today = sd.toDateString() === new Date().toDateString();
   $('since').textContent = t('sessionSince', { t: (today ? '' : sd.toLocaleDateString(locale, { day: 'numeric', month: 'numeric' }) + ' ') + clock(s.since) });
-  $('sKm').innerHTML = `${nf(s.km)}<small>${t('kmDriven')}</small>`;
+  $('sKm').innerHTML = `${nf(perDist(s.km))}<small>${t('kmDriven', { u: dU() })}</small>`;
   $('sTime').innerHTML = `${hm(s.drive_s)}<small>${t('atWheel')}</small>`;
   $('sNet').innerHTML = `<span class="${s.net < 0 ? 'neg' : ''}">${money(s.net)}</span><small>${t('netProfit')}</small>`;
   const rows = [
@@ -665,8 +685,8 @@ function renderStats(s) {
     ['tolls', `${s.tolls_n}×`, money(-s.tolls_sum)],
     ['transport', `${s.transport_n}×`, money(-s.transport_sum)],
     ['perHour', s.per_hour == null || !s.jobs_ok ? '–' : money(s.per_hour), ''],
-    ['fuelUsed', `${nf(s.fuel_l)} l`, s.km > 20 && s.avg_l100 ? `${nf(s.avg_l100, 1)} l/100 km` : ''],
-    ['avgSpeed', s.avg_kmh ? `${nf(s.avg_kmh)} km/h` : '–', t('maxSpeed', { v: nf(s.max_kmh) })],
+    ['fuelUsed', vol(s.fuel_l), s.km > 20 && s.avg_l100 ? cons(s.avg_l100) : ''],
+    ['avgSpeed', s.avg_kmh ? spd(s.avg_kmh) : '–', t('maxSpeed', { v: spd(s.max_kmh) })],
     ['overLimit', hm(s.speeding_s), s.drive_s > 60 ? t('ofDriving', { p: nf(s.speeding_s / s.drive_s * 100) }) : ''],
   ];
   $('srows').innerHTML = rows.map(([k, a, b]) => `<dt>${t(k)}</dt><dd><span style="white-space:nowrap">${a}</span>${b ? `<small>${b}</small>` : ''}</dd>`).join('');
@@ -705,7 +725,7 @@ function showDelivery(d) {
   $('dRoute').textContent = `${d.from} → ${d.to}`;
   $('dRev').textContent = money(d.revenue);
   $('dXp').textContent = d.xp != null ? `${nf(d.xp)} XP` : '–';
-  $('dKm').textContent = d.km ? `${nf(d.km)} km` : '–';
+  $('dKm').textContent = d.km ? dist(d.km) : '–';
   $('dDmg').textContent = d.damage != null ? `${nf(d.damage * 100, 1)} %` : '–';
   const st = d.style;
   $('dStyle').hidden = !st;
@@ -732,22 +752,22 @@ async function openHistory(game) {
   $('hTabs').querySelectorAll('button').forEach(b => { b.onclick = () => openHistory(b.dataset.game); });
   const tt = h.totals;
   $('hTotals').innerHTML = [
-    [`${tt.ok}×`, t('hDelivered')], [m(tt.revenue), t('hRevenue')], [`${nf(tt.km)} km`, t('hKm')],
-    [tt.km ? money(tt.revenue / tt.km, g, perKmDigits) : '–', t('hPerKm')],
-    [h.best ? `${h.best.src} → ${h.best.dst}` : '–', h.best ? t('hBestPer', { v: money(h.best.revenue / h.best.km, g, perKmDigits) }) : t('hBest')],
+    [`${tt.ok}×`, t('hDelivered')], [m(tt.revenue), t('hRevenue')], [dist(tt.km, g), t('hKm')],
+    [tt.km ? money(tt.revenue / perDist(tt.km, g), g, perKmDigits) : '–', t('hPerKm', { u: dU(g) })],
+    [h.best ? `${h.best.src} → ${h.best.dst}` : '–', h.best ? t('hBestPer', { v: money(h.best.revenue / perDist(h.best.km, g), g, perKmDigits), u: dU(g) }) : t('hBest')],
   ].map(([a, b]) => `<div>${a}<small>${b}</small></div>`).join('');
   const max = Math.max(1, ...h.days.map(d => d.revenue));
   const compact = new Intl.NumberFormat(locale, { notation: 'compact', maximumFractionDigits: 1 });
   $('hDays').innerHTML = h.days.length ? h.days.map(d => {
     const [, mo, dd] = d.day.split('-');
     const label = lang === 'en' ? `${+dd}/${+mo}` : `${+dd}. ${+mo}.`;
-    return `<div class="day" title="${t('hDayTip', { n: d.n, km: nf(d.km) })}"><em>${compact.format(d.revenue * curOf(g).rate)}</em><i style="height:${Math.max(0, d.revenue) / max * 85}%"></i><span>${label}</span></div>`;
+    return `<div class="day" title="${t('hDayTip', { n: d.n, d: dist(d.km, g) })}"><em>${compact.format(d.revenue * curOf(g).rate)}</em><i style="height:${Math.max(0, d.revenue) / max * 85}%"></i><span>${label}</span></div>`;
   }).join('') : `<p class="empty">${t('hEmpty')}</p>`;
-  $('hJobs').innerHTML = `<tr><th>${t('thWhen')}</th><th>${t('thRoute')}</th><th>${t('thCargo')}</th><th class="r">km</th><th class="r">${t('thRevenue')}</th><th class="r">${t('thPerKm', { c: curSym(g) })}</th><th class="r">${t('thDamage')}</th><th class="r">${t('thStyle')}</th></tr>` +
+  $('hJobs').innerHTML = `<tr><th>${t('thWhen')}</th><th>${t('thRoute')}</th><th>${t('thCargo')}</th><th class="r">${dU(g)}</th><th class="r">${t('thRevenue')}</th><th class="r">${t('thPerKm', { c: curSym(g), u: dU(g) })}</th><th class="r">${t('thDamage')}</th><th class="r">${t('thStyle')}</th></tr>` +
     h.jobs.map(j => {
       const km = j.driven_km > 0 ? j.driven_km : j.planned_km;
       const when = new Date(j.ts * 1000).toLocaleString(locale, { day: 'numeric', month: 'numeric', hour: '2-digit', minute: '2-digit' });
-      return `<tr class="${j.ok ? '' : 'bad'}"><td>${when}</td><td>${j.src} → ${j.dst}</td><td>${j.cargo}</td><td class="r">${nf(km)}</td><td class="r">${m(j.revenue)}</td><td class="r">${j.ok && km ? nf(j.revenue * curOf(g).rate / km, perKmDigits) : '–'}</td><td class="r">${j.ok ? nf(j.damage * 100, 1) + ' %' : t('hCancelled')}</td><td class="r">${j.score == null ? '–' : `<span class="${j.score >= 75 ? 'sc-hi' : j.score >= 50 ? 'sc-mid' : 'sc-low'}" title="${gradeOf(j.score)}">${j.score}</span>`}</td></tr>`;
+      return `<tr class="${j.ok ? '' : 'bad'}"><td>${when}</td><td>${j.src} → ${j.dst}</td><td>${j.cargo}</td><td class="r">${nf(perDist(km, g))}</td><td class="r">${m(j.revenue)}</td><td class="r">${j.ok && km ? nf(j.revenue * curOf(g).rate / perDist(km, g), perKmDigits) : '–'}</td><td class="r">${j.ok ? nf(j.damage * 100, 1) + ' %' : t('hCancelled')}</td><td class="r">${j.score == null ? '–' : `<span class="${j.score >= 75 ? 'sc-hi' : j.score >= 50 ? 'sc-mid' : 'sc-low'}" title="${gradeOf(j.score)}">${j.score}</span>`}</td></tr>`;
     }).join('');
   $('history').hidden = false;
 }
@@ -768,6 +788,7 @@ function openSettings() {
   $('sLang').value = settings.lang;
   fillCurrencies($('sEtsCur'), settings.ets2.currency); $('sEtsRate').value = settings.ets2.rate;
   fillCurrencies($('sAtsCur'), settings.ats.currency); $('sAtsRate').value = settings.ats.rate;
+  $('sEtsUnits').value = settings.ets2.units || 'metric'; $('sAtsUnits').value = settings.ats.units || 'imperial';
   syncRate('ets2'); syncRate('ats');
   $('settings').hidden = false;
 }
@@ -780,8 +801,8 @@ $('sSave').onclick = async () => {
   const num = id => { const x = parseFloat(String($(id).value).replace(',', '.')); return x > 0 ? x : 1; };
   const s = {
     lang: $('sLang').value,
-    ets2: { currency: $('sEtsCur').value, rate: num('sEtsRate') },
-    ats: { currency: $('sAtsCur').value, rate: num('sAtsRate') },
+    ets2: { currency: $('sEtsCur').value, rate: num('sEtsRate'), units: $('sEtsUnits').value },
+    ats: { currency: $('sAtsCur').value, rate: num('sAtsRate'), units: $('sAtsUnits').value },
   };
   const res = await fetch('/api/settings', { method: 'POST', headers: { 'X-Dash': '1', 'Content-Type': 'application/json' }, body: JSON.stringify(s) });
   if (res.ok) { setSettings(s); if (lastView) render(lastView); $('settings').hidden = true; }
