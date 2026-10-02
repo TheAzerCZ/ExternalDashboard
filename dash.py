@@ -75,6 +75,7 @@ def validate_config(user):
     except (KeyError, TypeError, ValueError):
         return None
 HISTORY_DB = os.path.join(HERE, "history.db")
+SPEED_TOL_KMH = 5   # tolerance nad limitem, než se jízda počítá jako překročení (statistiky, hodnocení)
 DRIVE_AFTER_SLEEP_MIN = 11 * 60  # po vyspání má řidič v ETS2 11 h herního času jízdy
 MAP_NAME = "Local\\SCSTelemetry"
 READ_SIZE = 8192  # hlavní struktura + 1. návěs (layout pluginu v1.12)
@@ -379,6 +380,7 @@ class Processor:
             if c not in cols:
                 self.db.execute(f"ALTER TABLE jobs ADD COLUMN {c} {typ}")
         self.db.commit()
+        self._migrate_scores()
         self.style = self._load_style()
         self.last_tick = time.time()
         self.last_save = time.time()
@@ -471,6 +473,22 @@ class Processor:
         except sqlite3.Error as e:
             print("Nepodařilo se uložit zakázku do historie:", e)
 
+    def _migrate_scores(self):
+        """Přepočítá hodnocení starších zakázek podle aktuálního vzorce (jen jednou, pozná podle "v")."""
+        rows = self.db.execute("SELECT id, style, driven_km, planned_km FROM jobs WHERE style IS NOT NULL").fetchall()
+        for jid, style_json, driven, planned in rows:
+            try:
+                st = json.loads(style_json)
+            except ValueError:
+                continue
+            if st.get("v") == 2:
+                continue
+            km = driven if driven and driven > 0 else planned
+            st.update(v=2, km=round(km or 0),
+                      score=self.style_score(st["brakes"], st["corners"], st["hits"], st["speeding"], km))
+            self.db.execute("UPDATE jobs SET score = ?, style = ? WHERE id = ?", (st["score"], json.dumps(st), jid))
+        self.db.commit()
+
     def history(self, game):
         game = game if game in ("ETS2", "ATS") else self.last_game
         with self.lock:
@@ -549,7 +567,7 @@ class Processor:
                 if kmh > 1:
                     self.stats["drive_s"] += dt
                     self.stats["speed_int"] = self.stats.get("speed_int", 0.0) + kmh * dt
-                if d["speedLimit"] > 0 and kmh > d["speedLimit"] * 3.6 + 5:
+                if d["speedLimit"] > 0 and kmh > d["speedLimit"] * 3.6 + SPEED_TOL_KMH:
                     self.stats["speeding_s"] += dt
                 self.stats["max_kmh"] = max(self.stats["max_kmh"], kmh)
             self.prev = d
@@ -558,11 +576,18 @@ class Processor:
                 self.save(); self._save_style(); self.last_save = now
 
     # ---------- hodnocení stylu jízdy (per zakázka, přežije restart hry) ----------
-    BRAKE_MS2 = 3.5     # prudké brzdění: zpomalení nad ~0,36 g
-    CORNER_MS2 = 3.0    # ostrá zatáčka: boční zrychlení nad ~0,3 g
+    BRAKE_MS2 = 4.5     # prudké brzdění: zpomalení nad ~0,46 g (nouzové brzdění kamionu, ne běžné zastavení)
+    CORNER_MS2 = 3.5    # ostrá zatáčka: boční zrychlení nad ~0,36 g
     SPIKE_MS2 = 15.0    # víc už je náraz, ne brzdění/zatáčka (nárazy počítá detekce poškození)
-    HOLD_S = 0.3        # jev musí trvat aspoň tolik, aby ho nezpůsobil jeden hrbol
+    HOLD_S = 0.5        # jev musí trvat aspoň tolik, aby ho nezpůsobil hrbol nebo krátké cuknutí
     COOLDOWN_S = 3.0
+
+    @staticmethod
+    def style_score(brakes, corners, hits, speeding_pct, km):
+        """Skóre 0-100. Brzdění a zatáčky se počítají na 100 km, aby délka trasy nehrála roli."""
+        per100 = 100 / max(km or 0, 50)
+        penalty = (brakes + corners) * 8 * per100 + hits * 10 + speeding_pct * 1.5
+        return max(0, min(100, round(100 - penalty)))
 
     @staticmethod
     def _job_key(d):
@@ -595,12 +620,16 @@ class Processor:
                           "_b": 0.0, "_c": 0.0, "_bt": 0.0, "_ct": 0.0}
             self._save_style()
         st = self.style
+        odo = d["truckOdometer"]
+        if st.get("_odo") is not None and 0 < odo - st["_odo"] < 2:
+            st["km"] = st.get("km", 0.0) + odo - st["_odo"]
+        st["_odo"] = odo
         kmh = abs(d["speed"]) * 3.6
         if kmh < 3 or dt > 1:
             st["_b"] = st["_c"] = 0.0
             return
         st["drive_s"] += dt
-        if d["speedLimit"] > 0 and kmh > d["speedLimit"] * 3.6 + 5:
+        if d["speedLimit"] > 0 and kmh > d["speedLimit"] * 3.6 + SPEED_TOL_KMH:
             st["speeding_s"] += dt
         decel, lateral = d["accZ"], abs(d["accX"])   # Z míří dozadu -> kladné = brzdění při jízdě vpřed
         if d["speed"] < 0:
@@ -620,12 +649,11 @@ class Processor:
         self._save_style()
         if not st or st["drive_s"] < 120:
             return None   # dashboard viděl z jízdy moc málo na férové hodnocení
-        hours = st["drive_s"] / 3600
         speeding_pct = st["speeding_s"] / st["drive_s"] * 100
-        # srážky za události vážené na hodinu jízdy, aby dlouhé trasy nebyly znevýhodněné
-        penalty = (st["brakes"] * 4 + st["corners"] * 3) / max(hours, 0.25) + st["hits"] * 6 + speeding_pct * 0.5
-        return {"score": max(0, min(100, round(100 - penalty))), "brakes": st["brakes"], "corners": st["corners"],
-                "hits": st["hits"], "speeding": round(speeding_pct), "drive_s": round(st["drive_s"])}
+        km = st.get("km", 0) if st.get("km", 0) > 20 else j.get("plannedDistanceKm", 0)
+        score = self.style_score(st["brakes"], st["corners"], st["hits"], speeding_pct, km)
+        return {"v": 2, "score": score, "brakes": st["brakes"], "corners": st["corners"], "hits": st["hits"],
+                "speeding": round(speeding_pct), "drive_s": round(st["drive_s"]), "km": round(km)}
 
     DAMAGE_PARTS = (("engine", "wearEngine"), ("transmission", "wearTransmission"), ("cabin", "wearCabin"),
                     ("chassis", "wearChassis"), ("wheels", "wearWheels"), ("cargo", "cargoDamage"))
