@@ -91,6 +91,15 @@
   .limit.us small { font-size: calc(var(--u)*1.05); font-weight: 700; letter-spacing: .04em; text-align: center; margin-bottom: calc(var(--u)*.4); line-height: 1.05; }
   .limit.none { background: transparent; border-color: var(--line); color: var(--muted); font-size: calc(var(--u)*1.3); font-weight: 400; }
   .over .num { color: var(--amber); }
+  .over-hi .num { color: #ff5a52; }
+  /* jemný puls značky při výrazném překročení: jen pulzující záře, žádné zvětšování */
+  .over-hi .limit:not(.none) { animation: limitPulse 1.6s ease-out infinite; }
+  @keyframes limitPulse {
+    0% { box-shadow: 0 0 0 0 rgba(255, 90, 82, .55); }
+    70% { box-shadow: 0 0 0 calc(var(--u)*1.1) rgba(255, 90, 82, 0); }
+    100% { box-shadow: 0 0 0 0 rgba(255, 90, 82, 0); }
+  }
+  @media (prefers-reduced-motion: reduce) { .over-hi .limit:not(.none) { animation: none; box-shadow: 0 0 0 calc(var(--u)*.5) rgba(255, 90, 82, .5); } }
   .gearbox { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: calc(var(--u)*1.2); }
   .gearbox .g { font-size: calc(var(--u)*3.4); font-weight: 600; line-height: 1; min-width: 1.6ch; }
   .gearbox small { color: var(--muted); font-size: calc(var(--u)*1.2); white-space: nowrap; }
@@ -123,6 +132,24 @@
   .rest span { color: var(--muted); font-size: calc(var(--u)*1.35); }
   .rest.soon b { color: var(--amber); }
   .rest.over b { color: #ff5a52; }
+  /* jemný puls ikony spánku: oranžově při upozornění, červeně po vypršení (stejný styl jako značka limitu) */
+  .rest svg { border-radius: 12%; }
+  .rest.soon svg { animation: restPulseAmber 1.6s ease-out infinite; }
+  .rest.over svg { animation: restPulseRed 1.6s ease-out infinite; }
+  @keyframes restPulseAmber {
+    0% { box-shadow: 0 0 0 0 rgba(245, 168, 0, .55); }
+    70% { box-shadow: 0 0 0 calc(var(--u)*1.1) rgba(245, 168, 0, 0); }
+    100% { box-shadow: 0 0 0 0 rgba(245, 168, 0, 0); }
+  }
+  @keyframes restPulseRed {
+    0% { box-shadow: 0 0 0 0 rgba(255, 90, 82, .55); }
+    70% { box-shadow: 0 0 0 calc(var(--u)*1.1) rgba(255, 90, 82, 0); }
+    100% { box-shadow: 0 0 0 0 rgba(255, 90, 82, 0); }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .rest.soon svg { animation: none; box-shadow: 0 0 0 calc(var(--u)*.4) rgba(245, 168, 0, .6); }
+    .rest.over svg { animation: none; box-shadow: 0 0 0 calc(var(--u)*.4) rgba(255, 90, 82, .6); }
+  }
   .blinkers { display: flex; gap: calc(var(--u)*1.2); font-size: calc(var(--u)*2.4); color: var(--line); line-height: 1; }
   .blinkers .on { color: var(--green); }
   .clock { font-size: calc(var(--u)*2.2); font-weight: 600; }
@@ -517,6 +544,7 @@ const hmGame = m => m == null ? '–' : `${Math.floor(m / 60)} h ${String(Math.f
 const clock = ts => ts ? new Date(ts * 1000).toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' }) : '–';
 const gameClock = m => { m = Math.floor(m); return `${t('days')[Math.floor(m / 1440) % 7]} ${String(Math.floor(m % 1440 / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`; };
 const REST_WARN_MIN = 95;
+const SPEED_WARN_KMH = 5;  // do +5 km/h oranžová, od +6 červená s pulzem; odpovídá toleranci SPEED_TOL_KMH v dash.py
 
 // jednotky: SDK posílá metriku, pro imperiální režim převádíme (US galony, mpg, °F, libry)
 const KM2MI = 0.621371;
@@ -578,7 +606,10 @@ function render(v) {
   // jízda
   const sp = spdN(v.speed), lim = spdN(v.limit), us = imp();
   $('spd').textContent = sp;
-  $('speedbox').classList.toggle('over', lim > 0 && sp > lim + (us ? 1 : 2));
+  // do +5 km/h nad limitem oranžová, od +6 červená s pulzem značky (porovnáváme v km/h, nezávisle na jednotkách)
+  const over = v.limit > 0 ? Math.round(v.speed) - Math.round(v.limit) : 0;
+  $('speedbox').classList.toggle('over', over > 0 && over <= SPEED_WARN_KMH);
+  $('speedbox').classList.toggle('over-hi', over > SPEED_WARN_KMH);
   const L = $('lim');
   L.className = (lim > 0 ? 'limit' : 'limit none') + (us ? ' us' : '');
   // v imperiálním režimu americká obdélníková značka SPEED LIMIT
