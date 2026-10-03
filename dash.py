@@ -481,11 +481,11 @@ class Processor:
                 st = json.loads(style_json)
             except ValueError:
                 continue
-            if st.get("v") == 2:
+            if st.get("v") in (2, 3):
                 continue
             km = driven if driven and driven > 0 else planned
             st.update(v=2, km=round(km or 0),
-                      score=self.style_score(st["brakes"], st["corners"], st["hits"], st["speeding"], km))
+                      score=self.style_score(st["brakes"], st["corners"], st["hits"] * 10, st["speeding"], km))
             self.db.execute("UPDATE jobs SET score = ?, style = ? WHERE id = ?", (st["score"], json.dumps(st), jid))
         self.db.commit()
 
@@ -583,10 +583,15 @@ class Processor:
     COOLDOWN_S = 3.0
 
     @staticmethod
-    def style_score(brakes, corners, hits, speeding_pct, km):
+    def hit_penalty(damage_pct):
+        """Srážka podle velikosti poškození: škrábnutí 1 bod, 5 % = 10 bodů, víc než 7,5 % max 15 bodů."""
+        return min(15.0, max(1.0, damage_pct * 2))
+
+    @staticmethod
+    def style_score(brakes, corners, hit_points, speeding_pct, km):
         """Skóre 0-100. Brzdění a zatáčky se počítají na 100 km, aby délka trasy nehrála roli."""
         per100 = 100 / max(km or 0, 50)
-        penalty = (brakes + corners) * 8 * per100 + hits * 10 + speeding_pct * 1.5
+        penalty = (brakes + corners) * 8 * per100 + hit_points + speeding_pct * 1.5
         return max(0, min(100, round(100 - penalty)))
 
     @staticmethod
@@ -651,8 +656,11 @@ class Processor:
             return None   # dashboard viděl z jízdy moc málo na férové hodnocení
         speeding_pct = st["speeding_s"] / st["drive_s"] * 100
         km = st.get("km", 0) if st.get("km", 0) > 20 else j.get("plannedDistanceKm", 0)
-        score = self.style_score(st["brakes"], st["corners"], st["hits"], speeding_pct, km)
-        return {"v": 2, "score": score, "brakes": st["brakes"], "corners": st["corners"], "hits": st["hits"],
+        dmg = st.get("hitDmg", [])
+        # srážky ze starší rozjeté zakázky (bez uložené velikosti) bereme jako středně velké
+        hit_points = sum(self.hit_penalty(x) for x in dmg) + 5 * max(0, st["hits"] - len(dmg))
+        score = self.style_score(st["brakes"], st["corners"], hit_points, speeding_pct, km)
+        return {"v": 3, "score": score, "hitDmg": dmg, "brakes": st["brakes"], "corners": st["corners"], "hits": st["hits"],
                 "speeding": round(speeding_pct), "drive_s": round(st["drive_s"]), "km": round(km)}
 
     DAMAGE_PARTS = (("engine", "wearEngine"), ("transmission", "wearTransmission"), ("cabin", "wearCabin"),
@@ -682,6 +690,7 @@ class Processor:
                 self._log("dmg", parts=[[n, v] for n, v in big.items()])
                 if self.style:
                     self.style["hits"] += 1
+                    self.style.setdefault("hitDmg", []).append(round(sum(big.values()) * 100, 2))
                 self.last_damage = now
             self.dmg_t = 0.0
 
