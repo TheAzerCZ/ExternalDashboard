@@ -109,6 +109,13 @@
   .bar.bad i { background: var(--red); }
   .bar.ok i { background: var(--green); }
   .chips { display: flex; flex-wrap: wrap; gap: calc(var(--u)*.5); }
+  /* kontrolky: vypnuté tlumeně šedé, zapnuté ve své barvě jako na skutečné palubce */
+  .tells { display: grid; grid-template-columns: repeat(9, 1fr); gap: calc(var(--u)*.5); }
+  .tell { aspect-ratio: 1; max-height: calc(var(--u)*3.6); border-radius: calc(var(--u)*.6); display: grid; place-items: center;
+    color: #3d4d60; background: rgba(0, 0, 0, .12); transition: color .15s, background .15s; }
+  .tell svg { width: 66%; height: 66%; }
+  .tell.on { color: var(--c); background: color-mix(in srgb, var(--c) 14%, transparent); }
+  .tell.on.blink { animation: blink .8s steps(1) infinite; }
   .chip { font-size: calc(var(--u)*1.1); padding: calc(var(--u)*.3) calc(var(--u)*.75); border-radius: 99px; border: 1px solid var(--line); color: var(--muted); }
   .chip.on { background: var(--white); color: var(--road); border-color: var(--white); }
   .chip.alert { background: var(--amber); color: #1a1a1a; border-color: var(--amber); }
@@ -243,7 +250,7 @@
   #offline code { color: var(--white); }
   .pausechip { position: fixed; z-index: 5; top: calc(var(--u)*2.2); left: 50%; transform: translateX(-50%); background: var(--amber); color: #1a1a1a; padding: calc(var(--u)*.3) calc(var(--u)*1.2); border-radius: 99px; font-size: calc(var(--u)*1.3); display: none; }
   .paused .pausechip { display: block; }
-  @media (prefers-reduced-motion: reduce) {   .chip.blink { animation: none; } .bar i { transition: none; } }
+  @media (prefers-reduced-motion: reduce) {   .chip.blink, .tell.on.blink { animation: none; } .bar i { transition: none; } }
   /* nastavení */
   #settings { position: fixed; inset: 0; background: rgba(26,36,48,.9); display: grid; place-items: center; z-index: 11; }
   #settings[hidden] { display: none; }
@@ -288,7 +295,7 @@
       <div class="limit none" id="lim"></div>
     </div>
     <div class="gearbox"><div class="g" id="gear">N</div><div class="bar" id="rpmbar"><i id="rpm"></i></div><small id="retarder"></small></div>
-    <div class="chips" id="chips"></div>
+    <div class="tells" id="chips"></div>
     <div class="rule"></div>
     <div class="tank"><span data-i18n="diesel"></span><div class="bar" id="fuelbar"><i id="fuel"></i></div><span id="fuelTxt">–</span></div>
     <div class="tank"><span>AdBlue</span><div class="bar" id="adbar"><i id="ad"></i></div><span id="adTxt">–</span></div>
@@ -543,6 +550,18 @@ const hm = s => { if (s == null) return '–'; s = Math.max(0, Math.round(s / 60
 const hmGame = m => m == null ? '–' : `${Math.floor(m / 60)} h ${String(Math.floor(m % 60)).padStart(2, '0')} min`;
 const clock = ts => ts ? new Date(ts * 1000).toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' }) : '–';
 const gameClock = m => { m = Math.floor(m); return `${t('days')[Math.floor(m / 1440) % 7]} ${String(Math.floor(m % 1440 / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`; };
+// ikony kontrolek (vlastní kresby ve stylu ISO symbolů) a jejich barva, když svítí
+const TELL = {
+  lowBeam: { c: '#3fbf7f', d: '<path d="M14 6.5c3.6 0 6.5 2.5 6.5 5.5s-2.9 5.5-6.5 5.5z"/><path d="M10.5 8 3.5 10M10.5 12 3.5 14M10.5 16 3.5 18"/>' },
+  highBeam: { c: '#4d8dff', d: '<path d="M14 6.5c3.6 0 6.5 2.5 6.5 5.5s-2.9 5.5-6.5 5.5z"/><path d="M10.5 8.5h-7M10.5 12h-7M10.5 15.5h-7"/>' },
+  beacon: { c: '#f5a800', d: '<path d="M6.5 19h11M8 19v-4.5a4 4 0 0 1 8 0V19"/><path d="M12 3.5v2.5M5.5 6l1.8 1.8M18.5 6l-1.8 1.8M3.5 12h2.3M20.5 12h-2.3"/>' },
+  hazard: { c: '#ff5a52', d: '<path d="M12 3.5 21 19.5H3z"/><path d="M12 9.5l4 7H8z"/>' },
+  wipers: { c: '#3fbf7f', d: '<path d="M3 7C8 5 16 5 21 7l-2 11.5H5z"/><path d="M12 18.5 7.5 9"/><circle cx="12" cy="18.5" r=".6" fill="currentColor"/>' },
+  engineBrake: { c: '#f5a800', d: '<path d="M4 10h2.5l2-2H15v2h3v2.5h2v-3M20 9.5v6M18 12.5v3h-3v2H8.5l-2-2H4z"/><path d="M4 10v5.5M10 11.5l1.5 1.5L10 14.5M13 11.5l1.5 1.5-1.5 1.5"/>' },
+  diffLock: { c: '#f5a800', d: '<path d="M3 8v8M21 8v8M3 12h5.5M15.5 12H21"/><circle cx="12" cy="12" r="3.5"/><path d="M10 10l4 4M14 10l-4 4"/>' },
+  liftAxle: { c: '#f5a800', d: '<path d="M4 15v5M20 15v5M4 17.5h16"/><path d="M12 13V4M8.5 7.5 12 4l3.5 3.5"/>' },
+  parkBrake: { c: '#ff5a52', d: '<circle cx="12" cy="12" r="6.5"/><path d="M10 15.5v-7h2.5a2 2 0 0 1 0 4H10"/><path d="M4.2 7.5a9 9 0 0 0 0 9M19.8 7.5a9 9 0 0 1 0 9"/>' },
+};
 const REST_WARN_MIN = 95;
 const SPEED_WARN_KMH = 5;  // do +5 km/h oranžová, od +6 červená s pulzem; odpovídá toleranci SPEED_TOL_KMH v dash.py
 
@@ -624,12 +643,13 @@ function render(v) {
   const l = v.lights;
   const chips = [
     ['lowBeam', l.lightsBeamLow], ['highBeam', l.lightsBeamHigh], ['beacon', l.lightsBeacon],
-    ['hazard', l.lightsHazard, 'blink'], ['wipers', l.wipers], ['engineBrake', l.motorBrake],
-    ['diffLock', l.differentialLock], ['liftAxle', l.liftAxle], ['parkBrake', l.parkBrake, 'alert'],
+    ['hazard', l.lightsHazard, true], ['wipers', l.wipers], ['engineBrake', l.motorBrake],
+    ['diffLock', l.differentialLock], ['liftAxle', l.liftAxle], ['parkBrake', l.parkBrake],
   ];
   $('bl').classList.toggle('on', !!l.blinkerLeftOn);
   $('br').classList.toggle('on', !!l.blinkerRightOn);
-  $('chips').innerHTML = chips.map(([k, on, x]) => `<span class="chip${on ? (x === 'alert' ? ' alert' : ' on') : ''}${on && x === 'blink' ? ' blink' : ''}">${t(k)}</span>`).join('');
+  $('chips').innerHTML = chips.map(([k, on, blink]) =>
+    `<span class="tell${on ? ' on' : ''}${blink ? ' blink' : ''}" style="--c:${TELL[k].c}" title="${t(k)}" role="img" aria-label="${t(k)}${on ? '' : ' (off)'}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${TELL[k].d}</svg></span>`).join('');
   const fp = v.fuelCap ? v.fuel / v.fuelCap * 100 : 0, ap = v.adblueCap ? v.adblue / v.adblueCap * 100 : 0;
   $('fuel').style.width = fp + '%'; $('fuelbar').className = 'bar' + (v.warn.fuelWarning ? ' bad' : fp < 25 ? ' warn' : '');
   $('fuelTxt').textContent = `${vol(v.fuel)} / ${nf(fp)} %`;
