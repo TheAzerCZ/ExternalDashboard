@@ -1,6 +1,7 @@
 # osobni data dashboardu
 session.json
 session.json.tmp
+job_progress.json
 history.db
 config.json
 dash.log
