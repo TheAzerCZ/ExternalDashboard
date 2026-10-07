@@ -265,6 +265,7 @@
   .scard input:disabled { opacity: .45; }
   .scard select:focus-visible, .scard input:focus-visible { outline: 2px solid var(--white); outline-offset: 1px; }
   .shint { color: var(--muted); font-size: calc(var(--u)*1.15); line-height: 1.4; }
+  .sver { color: var(--muted); font-size: calc(var(--u)*1.1); opacity: .7; }
   .sbtns { display: flex; justify-content: flex-end; gap: calc(var(--u)*.8); }
   .sbtns button { font-size: calc(var(--u)*1.4); padding: calc(var(--u)*.45) calc(var(--u)*1.4); }
   button.primary { background: var(--white); color: var(--road); border-color: var(--white); }
@@ -399,6 +400,7 @@
     <div class="srow"><span data-i18n="units"></span><select id="sAtsUnits"><option value="metric" data-i18n="metric"></option><option value="imperial" data-i18n="imperial"></option></select></div>
   </fieldset>
   <p class="shint" data-i18n="rateHint"></p>
+  <p class="sver" id="sVer"></p>
   <div class="sbtns"><button id="sCancel" data-i18n="cancel"></button><button id="sSave" class="primary" data-i18n="save"></button></div>
 </div></div>
 
@@ -422,7 +424,7 @@ const I18N = {
     restPlan: 'Odpočinek a plán', untilRest: 'do povinné pauzy, reálně {t}', restNow: 'Odpočiň si',
     restFine: 'hrozí pokuta za jízdu bez odpočinku', toDest: 'Do cíle', fuelLbl: 'Palivo',
     noSleep: 'dojedeš bez spánku', spare: '{t} herního času v záloze', tight: 'těsně, chybí {m} min',
-    sleeps: '{n}× spánek cestou', fuelOk: 'stačí do cíle', refuel: 'natankuj do {d}',
+    sleeps: '{n}× spánek cestou', fuelOk: 'stačí do cíle', fuelLeft: 'v cíli zbyde asi {v}', fuelMissing: 'nedojedeš, chybí asi {v}', fuelShort: 'dojde zhruba {d} před cílem',
     gameTime: 'herní čas', realTime: 'reálný čas',
     job: 'Zakázka', deadline: 'Termín doručení', buffer: 'Rezerva', bufferNoSleep: 'Rezerva bez spánku',
     cargoDmg: 'Poškození nákladu', cargoDmgLower: 'poškození nákladu', route: 'trasa {d}', special: 'speciální přeprava',
@@ -473,7 +475,7 @@ const I18N = {
     restPlan: 'Rest & plan', untilRest: 'until mandatory rest, {t} real', restNow: 'Take a rest',
     restFine: 'you risk a fine for driving without rest', toDest: 'To destination', fuelLbl: 'Fuel',
     noSleep: 'no sleep needed', spare: '{t} of game time to spare', tight: 'close call, {m} min short',
-    sleeps: '{n}× sleep on the way', fuelOk: 'enough to destination', refuel: 'refuel within {d}',
+    sleeps: '{n}× sleep on the way', fuelOk: 'enough to destination', fuelLeft: 'about {v} left on arrival', fuelMissing: 'won’t make it, ~{v} short', fuelShort: 'runs dry about {d} before destination',
     gameTime: 'game time', realTime: 'real time',
     job: 'Job', deadline: 'Deadline', buffer: 'Time buffer', bufferNoSleep: 'Buffer, excl. sleep',
     cargoDmg: 'Cargo damage', cargoDmgLower: 'cargo damage', route: 'route {d}', special: 'special transport',
@@ -600,6 +602,7 @@ function wearRows(el, obj) {
 function render(v) {
   lastView = v;
   if (v.settings) setSettings(v.settings);
+  if (v.version) $('sVer').textContent = `Palubka v${v.version}`;
   document.body.classList.toggle('offline', !v.connected);
   gameKey = ((v.connected ? v.game : v.stats && v.stats.game) || 'ETS2').toLowerCase();
   if (v.stats) renderStats(v.stats);
@@ -697,8 +700,9 @@ function render(v) {
   $('pSleep').innerHTML = !p ? '–' : p.sleeps === 0 ? `<span class="pos">${t('noSleep')}</span><small>${t('spare', { t: spare })}</small>`
     : p.sleeps === 1 && p.shortMin <= 60 ? `<span class="warn-t">${t('tight', { m: Math.ceil(p.shortMin) })}</span>`
     : `<span class="warn-t">${t('sleeps', { n: p.sleeps })}</span>`;
-  $('pFuel').innerHTML = !p ? '–' : p.fuelOk ? `<span class="pos">${t('fuelOk')}</span>`
-    : `<span class="warn-t">${t('refuel', { d: dist(p.fuelRange) })}</span>`;
+  $('pFuel').innerHTML = !p ? '–' : p.fuelOk
+    ? `<span class="pos">${t('fuelOk')}</span>${p.fuelLeftL != null ? `<small>${t('fuelLeft', { v: vol(p.fuelLeftL) })}</small>` : ''}`
+    : `<span class="warn-t">${p.fuelMissingL != null ? t('fuelMissing', { v: vol(Math.ceil(p.fuelMissingL / 10) * 10) }) : t('fuelMissing', { v: '–' })}</span><small>${t('fuelShort', { d: dist(p.fuelShortKm) })}</small>`;
   $('vehSec').classList.toggle('flash', !!v.damageFlash);
   showDelivery(v.delivery);
 

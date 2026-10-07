@@ -28,6 +28,7 @@ import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, urlparse
 
+VERSION = "1.1.0"   # při každé změně zvýšit a zapsat do CHANGELOG.md
 HERE = os.path.dirname(os.path.abspath(__file__))
 STATS_FILE = os.path.join(HERE, "session.json")
 JOB_FILE = os.path.join(HERE, "job_progress.json")
@@ -782,17 +783,25 @@ class Processor:
         rest = d["restStop"]
         sleeps = 0 if route_min <= rest else math.ceil((route_min - max(rest, 0)) / DRIVE_AFTER_SLEEP_MIN)
         route_km = d["routeDistance"] / 1000
+        # spotřeba v l/km odvozená z dojezdu palubního počítače, aby čísla seděla s "Dojezdem";
+        # když dojezd chybí, záloha z průměrné spotřeby
+        per_km = d["fuel"] / d["fuelRange"] if d["fuelRange"] > 1 else (
+            d["fuelAvgConsumption"] if d["fuelAvgConsumption"] > 0.05 else 0)
+        need_l = route_km * per_km * 1.05            # 5% rezerva na objížďky a stoupání
         return {
             "sleeps": sleeps,
             "shortMin": route_min - max(rest, 0),   # kolik herního času chybí k dojetí bez spánku
             "fuelOk": d["fuelRange"] >= route_km * 1.05,
             "fuelRange": d["fuelRange"],
+            "fuelShortKm": max(0.0, route_km - d["fuelRange"]),   # kolik km před cílem dojde nafta
+            "fuelMissingL": max(0.0, need_l - d["fuel"]) if per_km else None,
+            "fuelLeftL": max(0.0, d["fuel"] - route_km * per_km) if per_km else None,  # kolik zbyde v cíli
             "bufferMin": deadline - route_min if deadline is not None else None,
         }
 
     def snapshot(self):
         with self.lock:
-            return json.dumps({**self.view, "settings": self.config}, ensure_ascii=False)
+            return json.dumps({**self.view, "settings": self.config, "version": VERSION}, ensure_ascii=False)
 
 
 # --------------------------------------------------------------------------
@@ -905,7 +914,7 @@ def main():
             print("Hra ukončena, vypínám dashboard.")
             srv.shutdown()
         threading.Thread(target=watch, daemon=True).start()
-    print(f"Dashboard běží na http://127.0.0.1:{a.port}  ({'LAN' if a.lan else 'jen localhost'}"
+    print(f"Palubka v{VERSION} běží na http://127.0.0.1:{a.port}  ({'LAN' if a.lan else 'jen localhost'}"
           f"{', DEMO' if a.demo else ''})  – Ctrl+C ukončí")
     try:
         srv.serve_forever()
