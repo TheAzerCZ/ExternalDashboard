@@ -28,7 +28,7 @@ import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, urlparse
 
-VERSION = "1.1.0"   # při každé změně zvýšit a zapsat do CHANGELOG.md
+VERSION = "1.2.0"   # při každé změně zvýšit a zapsat do CHANGELOG.md
 HERE = os.path.dirname(os.path.abspath(__file__))
 STATS_FILE = os.path.join(HERE, "session.json")
 JOB_FILE = os.path.join(HERE, "job_progress.json")

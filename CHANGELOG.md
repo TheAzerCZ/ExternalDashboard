@@ -3,6 +3,10 @@
 Formát podle [Keep a Changelog](https://keepachangelog.com/cs/1.1.0/), verze podle [SemVer](https://semver.org/lang/cs/):
 **MAJOR**.MINOR.PATCH – minor = nová funkce, patch = oprava.
 
+## [1.2.0] – 2026-10-08
+### Přidáno
+- Ikona v záložce prohlížeče (favicon): modrá dálniční cedule s budíkem.
+
 ## [1.1.0] – 2026-10-07
 ### Přidáno
 - Číslo verze v okně Nastavení a v konzoli při startu.
