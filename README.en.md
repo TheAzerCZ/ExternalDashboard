@@ -5,6 +5,9 @@
 A second-monitor dashboard for Euro Truck Simulator 2 and American Truck Simulator.
 It runs only on your computer and sends nothing out.
 
+<img width="3840" height="1080" alt="01" src="https://github.com/user-attachments/assets/1c187ae3-80c8-4027-9fb2-fd0ed215b015" />
+<img width="1907" height="1073" alt="04" src="https://github.com/user-attachments/assets/ebd5d9c9-ef22-402b-9205-e3feb2ab6d1a" />
+
 ## Installation
 
 1. Download and install [Python](https://www.python.org/downloads/) (version 3.9 or newer).
@@ -28,6 +31,8 @@ Full screen: **F** key. Job history: **H** key. Language, currency and units: ge
    ```
 
 The dashboard then starts with the game and closes when you quit it.
+
+<img width="841" height="598" alt="image" src="https://github.com/user-attachments/assets/d542820c-781f-4297-b610-fcc0cccf5df3" />
 
 ## Updates
 
