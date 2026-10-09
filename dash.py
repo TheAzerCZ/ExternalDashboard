@@ -1,4 +1,8 @@
 """
+Palubka – lokální dashboard pro ETS2 / ATS
+Copyright (C) 2026 TheAzerCZ
+SPDX-License-Identifier: GPL-3.0-or-later  (viz LICENSE, převzaté části viz THIRD_PARTY_NOTICES.md)
+
 ETS2 / ATS lokální dashboard
 ============================
 Čte telemetrii ze sdílené paměti pluginu RenCloud/scs-sdk-plugin ("Local\\SCSTelemetry")
@@ -20,22 +24,35 @@ import json
 import math
 import os
 import random
+import re
 import sqlite3
+import shutil
 import struct
+import subprocess
 import sys
 import threading
 import time
+import urllib.error
+import urllib.request
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, urlparse
 
-VERSION = "1.2.0"   # při každé změně zvýšit a zapsat do CHANGELOG.md
+VERSION = "1.3.0"   # zvednutím verze a pushnutím na GitHub se aktualizace nabídne ostatním
 HERE = os.path.dirname(os.path.abspath(__file__))
 STATS_FILE = os.path.join(HERE, "session.json")
 JOB_FILE = os.path.join(HERE, "job_progress.json")
 CONFIG_FILE = os.path.join(HERE, "config.json")
 CURRENCIES = ("CZK", "EUR", "USD", "GBP", "PLN")
+
+# Aktualizace přímo ze souborů ve veřejném GitHub repu.
+UPDATE_REPO = "TheAzerCZ/ExternalDashboard"
+UPDATE_BRANCH = "main"
+# Jen tyhle soubory smí aktualizace přepsat. Osobní data (history.db, session.json, config.json) se nikdy nemění.
+UPDATE_FILES = ("dash.py", "dashboard.html", "dashboard-start.bat", "game-start.bat", "README.md", "LICENSE",
+                "THIRD_PARTY_NOTICES.md")
 DEFAULT_CONFIG = {
     "lang": "cs",
+    "updates": True,   # jednou při startu se zeptat GitHubu na novou verzi
     "ets2": {"currency": "CZK", "rate": 24.4945, "units": "metric"},  # ETS2 počítá v eurech; 24,4945 = herní kurz
     "ats": {"currency": "USD", "rate": 1.0, "units": "imperial"},     # ATS počítá v dolarech
 }
@@ -48,6 +65,8 @@ def load_config():
             user = json.load(f)
         if user.get("lang") in ("cs", "en"):
             cfg["lang"] = user["lang"]
+        if isinstance(user.get("updates"), bool):
+            cfg["updates"] = user["updates"]
         for g in ("ets2", "ats"):
             u = user.get(g) or {}
             if u.get("currency") in CURRENCIES:
@@ -64,8 +83,8 @@ def load_config():
 def validate_config(user):
     """Vrátí očištěnou konfiguraci, nebo None, když je vstup nesmyslný."""
     try:
-        cfg = {"lang": user["lang"]}
-        if cfg["lang"] not in ("cs", "en"):
+        cfg = {"lang": user["lang"], "updates": user.get("updates", True)}
+        if cfg["lang"] not in ("cs", "en") or not isinstance(cfg["updates"], bool):
             return None
         for g in ("ets2", "ats"):
             cur, rate, units = user[g]["currency"], float(user[g]["rate"]), user[g]["units"]
@@ -801,12 +820,110 @@ class Processor:
 
     def snapshot(self):
         with self.lock:
-            return json.dumps({**self.view, "settings": self.config, "version": VERSION}, ensure_ascii=False)
+            return json.dumps({**self.view, "settings": self.config, "version": VERSION,
+                               "update": UPDATER.public()}, ensure_ascii=False)
 
 
 # --------------------------------------------------------------------------
 #  HTTP server (SSE stream, statické soubory)
 # --------------------------------------------------------------------------
+# --------------------------------------------------------------------------
+#  Aktualizace (GitHub Releases, jen po kliknutí, s ověřením SHA-256)
+# --------------------------------------------------------------------------
+def _ver(v):
+    try:
+        return tuple(int(x) for x in str(v).lstrip("vV").split(".")[:3])
+    except ValueError:
+        return (0,)
+
+
+class Updater:
+    """Aktualizace přímo ze souborů ve větvi repa. Novou verzi pozná podle VERSION v dash.py na GitHubu,
+    takže se kamarádům nabídne, až když verzi zvedneš. Běžné commity bez změny VERSION nikomu nechodí."""
+    RAW = "https://raw.githubusercontent.com/{repo}/{branch}/{name}"
+    API = "https://api.github.com/repos/{repo}/commits?path=dash.py&sha={branch}&per_page=1"
+
+    def __init__(self):
+        self.info = None              # {"version", "notes"} když je na GitHubu novější verze
+        self.server = None
+        self.restart_requested = False
+        self.lock = threading.Lock()
+
+    def _get(self, url, limit):
+        req = urllib.request.Request(url, headers={"User-Agent": f"Palubka/{VERSION}", "Cache-Control": "no-cache"})
+        with urllib.request.urlopen(req, timeout=15) as r:
+            data = r.read(limit + 1)
+        if len(data) > limit:
+            raise ValueError("soubor je podezřele velký")
+        return data
+
+    def _raw(self, name):
+        return self._get(self.RAW.format(repo=UPDATE_REPO, branch=UPDATE_BRANCH, name=name), 5 * 1024 * 1024)
+
+    def check(self):
+        try:
+            remote = self._raw("dash.py").decode("utf-8")
+            m = re.search(r'^VERSION = "([\d.]+)"', remote, re.M)
+            if not m or _ver(m.group(1)) <= _ver(VERSION):
+                return
+            notes = ""
+            try:   # popis posledního commitu, který měnil dash.py, se ukáže v liště (nepovinné)
+                commits = json.loads(self._get(self.API.format(repo=UPDATE_REPO, branch=UPDATE_BRANCH), 256 * 1024))
+                notes = commits[0]["commit"]["message"].split("\n")[0][:300] if commits else ""
+            except Exception:  # noqa: BLE001
+                pass
+            self.info = {"version": m.group(1), "notes": notes}
+            print(f"Aktualizace: na GitHubu je verze {m.group(1)}")
+        except Exception as e:  # noqa: BLE001 - bez internetu prostě nic nenabízíme
+            print("Aktualizace: kontrola selhala:", e)
+
+    def public(self):
+        return dict(self.info) if self.info else None
+
+    def install(self):
+        if not self.info:
+            return False, "Žádná aktualizace není k dispozici."
+        if not self.lock.acquire(blocking=False):
+            return False, "Aktualizace už probíhá."
+        try:
+            files = {}
+            for name in UPDATE_FILES:          # nejdřív stáhnout všechno, teprve pak přepisovat
+                try:
+                    files[name] = self._raw(name)
+                except urllib.error.HTTPError as e:
+                    if e.code != 404 or name in ("dash.py", "dashboard.html"):
+                        raise
+            m = re.search(rb'^VERSION = "([\d.]+)"', files["dash.py"], re.M)
+            if not m or not files["dashboard.html"].lstrip().lower().startswith(b"<!doctype html"):
+                return False, "Stažené soubory nevypadají jako Palubka, aktualizace zrušena."
+            compile(files["dash.py"], "dash.py", "exec")   # rozbitý Python radši vůbec neinstalujeme
+            backup = os.path.join(HERE, "backup", VERSION)
+            os.makedirs(backup, exist_ok=True)
+            for name in files:
+                if os.path.exists(os.path.join(HERE, name)):
+                    shutil.copy2(os.path.join(HERE, name), os.path.join(backup, name))
+            for name, data in files.items():
+                tmp = os.path.join(HERE, name + ".new")
+                with open(tmp, "wb") as f:
+                    f.write(data)
+                os.replace(tmp, os.path.join(HERE, name))
+            print(f"Aktualizace: nainstalována verze {m.group(1).decode()}, záloha v {backup}")
+            return True, ""
+        except Exception as e:  # noqa: BLE001
+            return False, f"Aktualizace selhala: {e}"
+        finally:
+            self.lock.release()
+
+    def restart(self):
+        time.sleep(0.5)              # ať stihne odejít odpověď prohlížeči
+        self.restart_requested = True
+        if self.server:
+            self.server.shutdown()
+
+
+UPDATER = Updater()
+
+
 def make_handler(proc, allow_lan):
     page = os.path.join(HERE, "dashboard.html")
 
@@ -862,6 +979,17 @@ def make_handler(proc, allow_lan):
                 proc.reset()
                 self.send_response(204)
                 self.end_headers()
+            elif self.path == "/api/update":
+                ok, msg = UPDATER.install()
+                if not ok:
+                    body = json.dumps({"error": msg}, ensure_ascii=False).encode()
+                    self.send_response(500)
+                    self.send_header("Content-Type", "application/json; charset=utf-8")
+                    self.end_headers()
+                    return self.wfile.write(body)
+                self.send_response(202)
+                self.end_headers()
+                threading.Thread(target=UPDATER.restart, daemon=True).start()
             elif self.path == "/api/settings":
                 try:
                     n = min(int(self.headers.get("Content-Length", 0)), 4096)
@@ -908,6 +1036,9 @@ def main():
     bind = "0.0.0.0" if a.lan else "127.0.0.1"
     srv = ThreadingHTTPServer((bind, a.port), make_handler(proc, a.lan))
     srv.daemon_threads = True
+    UPDATER.server = srv
+    if proc.config.get("updates", True) and not a.demo:
+        threading.Thread(target=UPDATER.check, daemon=True).start()
     if a.exit_with_game:
         def watch():
             proc.game_exited.wait()
@@ -924,6 +1055,11 @@ def main():
         with proc.lock:
             proc.save()
         srv.server_close()
+    if UPDATER.restart_requested:
+        # nová verze je nainstalovaná -> spustíme ji se stejnými parametry (port je už uvolněný)
+        flags = getattr(subprocess, "DETACHED_PROCESS", 0) | getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0)
+        subprocess.Popen([sys.executable, os.path.join(HERE, "dash.py")] + sys.argv[1:], cwd=HERE,
+                         creationflags=flags if sys.platform == "win32" else 0)
 
 
 if __name__ == "__main__":

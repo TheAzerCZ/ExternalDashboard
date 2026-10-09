@@ -267,6 +267,20 @@
   .scard select:focus-visible, .scard input:focus-visible { outline: 2px solid var(--white); outline-offset: 1px; }
   .shint { color: var(--muted); font-size: calc(var(--u)*1.15); line-height: 1.4; }
   .sver { color: var(--muted); font-size: calc(var(--u)*1.1); opacity: .7; }
+  .scheck { display: flex; gap: calc(var(--u)*.8); align-items: flex-start; font-size: calc(var(--u)*1.4); cursor: pointer; }
+  .scheck input { width: auto; margin-top: .25em; accent-color: var(--green); }
+  .scheck small { display: block; color: var(--muted); font-size: calc(var(--u)*1.1); }
+  /* lišta s novou verzí */
+  #updBar { position: fixed; left: 50%; bottom: calc(var(--u)*1.6); transform: translateX(-50%); z-index: 9;
+    display: flex; align-items: center; gap: calc(var(--u)*1.2); max-width: min(92vw, calc(var(--u)*90));
+    background: var(--sign); border: calc(var(--u)*.2) solid var(--white); border-radius: calc(var(--u)*.7);
+    padding: calc(var(--u)*.7) calc(var(--u)*.8) calc(var(--u)*.7) calc(var(--u)*1.4); font-size: calc(var(--u)*1.35); box-shadow: 0 calc(var(--u)*.5) calc(var(--u)*2) rgba(0,0,0,.4); }
+  #updBar[hidden] { display: none; }
+  #updBar b { white-space: nowrap; }
+  #updBar span { color: rgba(242,244,242,.8); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+  #updBar button { color: var(--white); border-color: rgba(242,244,242,.5); white-space: nowrap; font-size: calc(var(--u)*1.25); }
+  #updBar button.primary { color: var(--sign); background: var(--white); border-color: var(--white); }
+  #updBar.err { background: #7a1f1b; }
   .sbtns { display: flex; justify-content: flex-end; gap: calc(var(--u)*.8); }
   .sbtns button { font-size: calc(var(--u)*1.4); padding: calc(var(--u)*.45) calc(var(--u)*1.4); }
   button.primary { background: var(--white); color: var(--road); border-color: var(--white); }
@@ -390,6 +404,9 @@
   <fieldset><legend data-i18n="language"></legend>
     <div class="srow"><select id="sLang"><option value="cs">Čeština</option><option value="en">English</option></select></div>
   </fieldset>
+  <fieldset><legend data-i18n="updates"></legend>
+    <label class="scheck"><input type="checkbox" id="sUpd"><span><span data-i18n="updCheck"></span><small data-i18n="updHint"></small></span></label>
+  </fieldset>
   <fieldset><legend>Euro Truck Simulator 2</legend>
     <div class="srow"><span data-i18n="currency"></span><select id="sEtsCur"></select></div>
     <div class="srow"><span data-i18n="rate"></span><span>1 € =</span><input id="sEtsRate" type="number" step="any" min="0"><span id="sEtsUnit"></span></div>
@@ -404,6 +421,8 @@
   <p class="sver" id="sVer"></p>
   <div class="sbtns"><button id="sCancel" data-i18n="cancel"></button><button id="sSave" class="primary" data-i18n="save"></button></div>
 </div></div>
+
+<div id="updBar" hidden><b id="updTitle"></b><span id="updNotes"></span><button id="updLater" data-i18n="updLater"></button><button id="updGo" class="primary" data-i18n="updGo"></button></div>
 
 <div id="offline"><div>
   <h1 data-i18n="waiting"></h1>
@@ -453,6 +472,8 @@ const I18N = {
     hBest: 'nejlepší zakázka', hBestPer: 'nejlepší zakázka, {v}/{u}', hEmpty: 'Zatím žádná doručená zakázka. Po prvním doručení se tu objeví graf.',
     hDayTip: '{n} zakázek, {d}', thWhen: 'Kdy', thRoute: 'Trasa', thCargo: 'Náklad', thRevenue: 'Výdělek',
     thPerKm: '{c}/{u}', thDamage: 'Poškození', hCancelled: 'zrušeno',
+    updates: 'Aktualizace', updCheck: 'Kontrolovat nové verze', updHint: 'Jednou při startu se dashboard zeptá GitHubu, jestli je venku nová verze. Nic dalšího se neposílá a nic se neinstaluje bez tvého kliknutí.',
+    updAvail: 'Nová verze {v}', updGo: 'Aktualizovat', updLater: 'Později', updWorking: 'Stahuji a instaluji verzi {v}…', updRestart: 'Restartuji dashboard…', updFail: 'Aktualizace se nepovedla',
     settings: 'Nastavení', language: 'Jazyk', currency: 'Měna', rate: 'Kurz', save: 'Uložit', cancel: 'Zrušit',
     rateHint: 'ETS2 počítá v eurech a ATS v dolarech, dashboard částky jen přepočítává. Výchozí kurz koruny (24,4945) je stejný, jaký používá ETS2. Ostatní výchozí kurzy jsou přibližné, klidně si je uprav.',
     waiting: 'Čekám na hru',
@@ -504,6 +525,8 @@ const I18N = {
     hBest: 'best job', hBestPer: 'best job, {v}/{u}', hEmpty: 'No delivered jobs yet. The chart will appear after your first delivery.',
     hDayTip: '{n} jobs, {d}', thWhen: 'When', thRoute: 'Route', thCargo: 'Cargo', thRevenue: 'Revenue',
     thPerKm: '{c}/{u}', thDamage: 'Damage', hCancelled: 'cancelled',
+    updates: 'Updates', updCheck: 'Check for new versions', updHint: 'Once at startup the dashboard asks GitHub whether a new version is out. Nothing else is sent and nothing is installed without your click.',
+    updAvail: 'New version {v}', updGo: 'Update', updLater: 'Later', updWorking: 'Downloading and installing {v}…', updRestart: 'Restarting dashboard…', updFail: 'Update failed',
     settings: 'Settings', language: 'Language', currency: 'Currency', rate: 'Rate', save: 'Save', cancel: 'Cancel',
     rateHint: 'ETS2 pays in euros and ATS in dollars; the dashboard only converts the amounts. The default CZK rate (24.4945) matches the one ETS2 uses. Other default rates are approximate, feel free to adjust them.',
     waiting: 'Waiting for the game',
@@ -523,7 +546,7 @@ const DEFAULT_RATES = {                        // výchozí kurzy při změně m
 };
 const CURRENCIES = ['CZK', 'EUR', 'USD', 'GBP', 'PLN'];
 
-let settings = { lang: 'cs', ets2: { currency: 'CZK', rate: 24.4945, units: 'metric' }, ats: { currency: 'USD', rate: 1, units: 'imperial' } };
+let settings = { lang: 'cs', updates: true, ets2: { currency: 'CZK', rate: 24.4945, units: 'metric' }, ats: { currency: 'USD', rate: 1, units: 'imperial' } };
 let lang = 'cs', locale = 'cs-CZ', gameKey = 'ets2', lastView = null;
 
 const t = (key, p = {}) => {
@@ -603,7 +626,12 @@ function wearRows(el, obj) {
 function render(v) {
   lastView = v;
   if (v.settings) setSettings(v.settings);
-  if (v.version) $('sVer').textContent = `Palubka v${v.version}`;
+  if (v.version) {
+    $('sVer').textContent = `Palubka v${v.version}`;
+    if (loadedVersion && v.version !== loadedVersion) location.reload();   // po aktualizaci načteme nové HTML
+    loadedVersion = loadedVersion || v.version;
+  }
+  showUpdate(v.update);
   document.body.classList.toggle('offline', !v.connected);
   gameKey = ((v.connected ? v.game : v.stats && v.stats.game) || 'ETS2').toLowerCase();
   if (v.stats) renderStats(v.stats);
@@ -842,6 +870,7 @@ function syncRate(g) {
 }
 function openSettings() {
   $('sLang').value = settings.lang;
+  $('sUpd').checked = settings.updates !== false;
   fillCurrencies($('sEtsCur'), settings.ets2.currency); $('sEtsRate').value = settings.ets2.rate;
   fillCurrencies($('sAtsCur'), settings.ats.currency); $('sAtsRate').value = settings.ats.rate;
   $('sEtsUnits').value = settings.ets2.units || 'metric'; $('sAtsUnits').value = settings.ats.units || 'imperial';
@@ -857,11 +886,43 @@ $('sSave').onclick = async () => {
   const num = id => { const x = parseFloat(String($(id).value).replace(',', '.')); return x > 0 ? x : 1; };
   const s = {
     lang: $('sLang').value,
+    updates: $('sUpd').checked,
     ets2: { currency: $('sEtsCur').value, rate: num('sEtsRate'), units: $('sEtsUnits').value },
     ats: { currency: $('sAtsCur').value, rate: num('sAtsRate'), units: $('sAtsUnits').value },
   };
   const res = await fetch('/api/settings', { method: 'POST', headers: { 'X-Dash': '1', 'Content-Type': 'application/json' }, body: JSON.stringify(s) });
   if (res.ok) { setSettings(s); if (lastView) render(lastView); $('settings').hidden = true; }
+};
+
+// ---------- aktualizace ----------
+let loadedVersion = null, updDismissed = null, updBusy = false;
+function showUpdate(u) {
+  const bar = $('updBar');
+  if (updBusy) return;
+  if (!u || u.version === updDismissed) { bar.hidden = true; return; }
+  bar.classList.remove('err');
+  $('updTitle').textContent = t('updAvail', { v: u.version });
+  $('updNotes').textContent = (u.notes || '').replace(/[#*_`>-]/g, '').replace(/\s+/g, ' ').trim();
+  $('updNotes').title = u.notes || '';
+  $('updGo').hidden = $('updLater').hidden = false;
+  bar.dataset.v = u.version;
+  bar.hidden = false;
+}
+$('updLater').onclick = () => { updDismissed = $('updBar').dataset.v; $('updBar').hidden = true; };
+$('updGo').onclick = async () => {
+  const v = $('updBar').dataset.v;
+  updBusy = true;
+  $('updGo').hidden = $('updLater').hidden = true;
+  $('updTitle').textContent = t('updWorking', { v }); $('updNotes').textContent = '';
+  try {
+    const res = await fetch('/api/update', { method: 'POST', headers: { 'X-Dash': '1' } });
+    if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || res.status);
+    $('updTitle').textContent = t('updRestart');   // po restartu se stránka sama obnoví (jiná verze)
+  } catch (e) {
+    $('updBar').classList.add('err');
+    $('updTitle').textContent = t('updFail'); $('updNotes').textContent = String(e.message || e);
+    $('updLater').hidden = false; updBusy = false;
+  }
 };
 
 // reálné hodiny běží nezávisle na hře
