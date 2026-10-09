@@ -1,10 +1,12 @@
 # osobni data dashboardu
 session.json
 session.json.tmp
-job_progress.json
 history.db
 config.json
+job_progress.json
 dash.log
+backup/
+*.new
 
 # Python
 __pycache__/
