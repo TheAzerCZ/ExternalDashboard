@@ -258,7 +258,8 @@
   /* nastavení */
   #settings { position: fixed; inset: 0; background: rgba(26,36,48,.9); display: grid; place-items: center; z-index: 11; }
   #settings[hidden] { display: none; }
-  .scard { background: var(--road-2); border-radius: calc(var(--u)*1); padding: calc(var(--u)*2.4); width: min(92vw, calc(var(--u)*60)); display: grid; gap: calc(var(--u)*1.6); }
+  .scard { background: var(--road-2); border-radius: calc(var(--u)*1); padding: calc(var(--u)*2.4) calc(var(--u)*2.4) 0; width: min(92vw, calc(var(--u)*60)); display: grid; gap: calc(var(--u)*1.6);
+    max-height: 94vh; overflow-y: auto; scrollbar-width: thin; scrollbar-color: var(--line) transparent; }
   .scard h1 { font-size: calc(var(--u)*2.6); font-weight: 600; }
   .scard fieldset { border: 1px solid var(--line); border-radius: calc(var(--u)*.6); padding: calc(var(--u)*1.2) calc(var(--u)*1.4); display: grid; gap: calc(var(--u)*1); }
   .scard legend { color: var(--muted); font-size: calc(var(--u)*1.25); padding: 0 .4em; }
@@ -284,7 +285,9 @@
   #updBar button { color: var(--white); border-color: rgba(242,244,242,.5); white-space: nowrap; font-size: calc(var(--u)*1.25); }
   #updBar button.primary { color: var(--sign); background: var(--white); border-color: var(--white); }
   #updBar.err { background: #7a1f1b; }
-  .sbtns { display: flex; justify-content: flex-end; gap: calc(var(--u)*.8); }
+  /* tlačítka přilepená dole, ať jsou vidět i když se nastavení musí posouvat */
+  .sbtns { display: flex; justify-content: flex-end; gap: calc(var(--u)*.8); position: sticky; bottom: 0; background: var(--road-2);
+    padding: calc(var(--u)*1.2) 0 calc(var(--u)*2.4); margin-top: calc(var(--u)*-.4); border-top: 1px solid var(--line); }
   .sbtns button { font-size: calc(var(--u)*1.4); padding: calc(var(--u)*.45) calc(var(--u)*1.4); }
   button.primary { background: var(--white); color: var(--road); border-color: var(--white); }
   button.primary:hover { color: var(--road); }
