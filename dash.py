@@ -37,7 +37,7 @@ import urllib.request
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, urlparse
 
-VERSION = "1.3.1"   # musí sedět s tagem releasu na GitHubu (release v1.3.1 -> VERSION = "1.3.1")
+VERSION = "1.3.2"   # musí sedět s tagem releasu na GitHubu (release v1.3.1 -> VERSION = "1.3.1")
 HERE = os.path.dirname(os.path.abspath(__file__))
 STATS_FILE = os.path.join(HERE, "session.json")
 JOB_FILE = os.path.join(HERE, "job_progress.json")
