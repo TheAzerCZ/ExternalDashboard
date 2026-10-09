@@ -32,6 +32,8 @@ Full screen: **F** key. Job history: **H** key. Language, currency and units: ge
 
 The dashboard then starts with the game and closes when you quit it.
 
+<img width="841" height="598" alt="image" src="https://github.com/user-attachments/assets/d542820c-781f-4297-b610-fcc0cccf5df3" />
+
 ## Updates
 
 On startup the dashboard checks here on GitHub for a new version. If there is one, it shows
