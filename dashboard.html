@@ -244,11 +244,14 @@
   .empty { color: var(--muted); font-size: calc(var(--u)*1.4); }
 
   /* odpojeno */
-  #offline { position: fixed; inset: 0; background: rgba(26,36,48,.94); display: none; place-items: center; text-align: center; }
+  #offline { position: fixed; inset: 0; background: rgba(26,36,48,.94); display: none; place-items: center; text-align: center; z-index: 20; }
   .offline #offline { display: grid; }
   #offline h1 { font-size: calc(var(--u)*3.4); font-weight: 600; margin-bottom: calc(var(--u)*1); }
-  #offline p { color: var(--muted); font-size: calc(var(--u)*1.5); max-width: 60ch; line-height: 1.45; }
+  #offline p { color: var(--muted); font-size: calc(var(--u)*1.5); max-width: 60ch; line-height: 1.45; margin: 0 auto; }
   #offline code { color: var(--white); }
+  #offline .en { margin-top: calc(var(--u)*3); padding-top: calc(var(--u)*2.4); border-top: 1px solid var(--line); }
+  #offline .en h1 { font-size: calc(var(--u)*2.4); }
+  #offline .en p { font-size: calc(var(--u)*1.3); }
   .pausechip { position: fixed; z-index: 5; top: calc(var(--u)*2.2); left: 50%; transform: translateX(-50%); background: var(--amber); color: #1a1a1a; padding: calc(var(--u)*.3) calc(var(--u)*1.2); border-radius: 99px; font-size: calc(var(--u)*1.3); display: none; }
   .paused .pausechip { display: block; }
   @media (prefers-reduced-motion: reduce) {   .chip.blink, .tell.on.blink { animation: none; } .bar i { transition: none; } }
@@ -293,7 +296,8 @@
 <body class="offline">
 <div class="pausechip" data-i18n="paused"></div>
 
-<header class="sign"><div class="sign-inner" id="sign">
+<header class="sign">
+<div class="sign-inner" id="sign">
   <div class="dest"><div class="from" id="from">–</div><div class="to" id="to"></div><div class="co" id="co"></div></div>
   <div class="eta">
     <div><b id="dist">–</b><small data-i18n="left"></small></div>
@@ -424,9 +428,15 @@
 
 <div id="updBar" hidden><b id="updTitle"></b><span id="updNotes"></span><button id="updLater" data-i18n="updLater"></button><button id="updGo" class="primary" data-i18n="updGo"></button></div>
 
+
+
 <div id="offline"><div>
-  <h1 data-i18n="waiting"></h1>
-  <p data-i18n-html="waitingText"></p>
+  <h1>Čekám na hru</h1>
+  <p>Spusť ETS2 nebo ATS. Pokud se nic nestane, zkontroluj, že je <code>scs-telemetry.dll</code> ve složce <code>bin\win_x64\plugins</code> ve složce hry a že jsi při startu hry potvrdil hlášku o rozšířených funkcích SDK.</p>
+  <div class="en">
+    <h1>Waiting for the game</h1>
+    <p>Start ETS2 or ATS. If nothing happens, check that <code>scs-telemetry.dll</code> is in the <code>bin\win_x64\plugins</code> folder of the game and that you confirmed the advanced SDK features dialog when the game started.</p>
+  </div>
 </div></div>
 
 <script>
