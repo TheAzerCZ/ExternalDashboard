@@ -37,16 +37,15 @@ import urllib.request
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, urlparse
 
-VERSION = "1.3.0"   # zvednutím verze a pushnutím na GitHub se aktualizace nabídne ostatním
+VERSION = "1.3.0"   # musí sedět s tagem releasu na GitHubu (release v1.3.1 -> VERSION = "1.3.1")
 HERE = os.path.dirname(os.path.abspath(__file__))
 STATS_FILE = os.path.join(HERE, "session.json")
 JOB_FILE = os.path.join(HERE, "job_progress.json")
 CONFIG_FILE = os.path.join(HERE, "config.json")
 CURRENCIES = ("CZK", "EUR", "USD", "GBP", "PLN")
 
-# Aktualizace přímo ze souborů ve veřejném GitHub repu.
+# Aktualizace z GitHub Releases ve veřejném repu. Stahují se soubory přesně ze stavu pod tagem releasu.
 UPDATE_REPO = "TheAzerCZ/ExternalDashboard"
-UPDATE_BRANCH = "main"
 # Jen tyhle soubory smí aktualizace přepsat. Osobní data (history.db, session.json, config.json) se nikdy nemění.
 UPDATE_FILES = ("dash.py", "dashboard.html", "dashboard-start.bat", "game-start.bat", "README.md", "LICENSE",
                 "THIRD_PARTY_NOTICES.md")
@@ -838,10 +837,10 @@ def _ver(v):
 
 
 class Updater:
-    """Aktualizace přímo ze souborů ve větvi repa. Novou verzi pozná podle VERSION v dash.py na GitHubu,
-    takže se kamarádům nabídne, až když verzi zvedneš. Běžné commity bez změny VERSION nikomu nechodí."""
-    RAW = "https://raw.githubusercontent.com/{repo}/{branch}/{name}"
-    API = "https://api.github.com/repos/{repo}/commits?path=dash.py&sha={branch}&per_page=1"
+    """Aktualizace z GitHub Releases: nová verze = nejnovější publikovaný release s tagem vX.Y.Z.
+    Běžné commity nikomu nechodí, dokud z nich neuděláš release."""
+    RAW = "https://raw.githubusercontent.com/{repo}/{ref}/{name}"
+    API = "https://api.github.com/repos/{repo}/releases/latest"
 
     def __init__(self):
         self.info = None              # {"version", "notes"} když je na GitHubu novější verze
@@ -858,27 +857,22 @@ class Updater:
         return data
 
     def _raw(self, name):
-        return self._get(self.RAW.format(repo=UPDATE_REPO, branch=UPDATE_BRANCH, name=name), 5 * 1024 * 1024)
+        return self._get(self.RAW.format(repo=UPDATE_REPO, ref=self.info["tag"], name=name), 5 * 1024 * 1024)
 
     def check(self):
         try:
-            remote = self._raw("dash.py").decode("utf-8")
-            m = re.search(r'^VERSION = "([\d.]+)"', remote, re.M)
-            if not m or _ver(m.group(1)) <= _ver(VERSION):
+            rel = json.loads(self._get(self.API.format(repo=UPDATE_REPO), 512 * 1024))
+            tag = rel.get("tag_name", "")
+            if not re.fullmatch(r"v?\d+(\.\d+){0,2}", tag) or _ver(tag) <= _ver(VERSION):
                 return
-            notes = ""
-            try:   # popis posledního commitu, který měnil dash.py, se ukáže v liště (nepovinné)
-                commits = json.loads(self._get(self.API.format(repo=UPDATE_REPO, branch=UPDATE_BRANCH), 256 * 1024))
-                notes = commits[0]["commit"]["message"].split("\n")[0][:300] if commits else ""
-            except Exception:  # noqa: BLE001
-                pass
-            self.info = {"version": m.group(1), "notes": notes}
-            print(f"Aktualizace: na GitHubu je verze {m.group(1)}")
+            notes = (rel.get("name") or "").strip() or (rel.get("body") or "").strip().split("\n")[0]
+            self.info = {"version": tag.lstrip("vV"), "tag": tag, "notes": notes[:300]}
+            print(f"Aktualizace: na GitHubu je release {tag}")
         except Exception as e:  # noqa: BLE001 - bez internetu prostě nic nenabízíme
             print("Aktualizace: kontrola selhala:", e)
 
     def public(self):
-        return dict(self.info) if self.info else None
+        return {"version": self.info["version"], "notes": self.info["notes"]} if self.info else None
 
     def install(self):
         if not self.info:
@@ -896,6 +890,10 @@ class Updater:
             m = re.search(rb'^VERSION = "([\d.]+)"', files["dash.py"], re.M)
             if not m or not files["dashboard.html"].lstrip().lower().startswith(b"<!doctype html"):
                 return False, "Stažené soubory nevypadají jako Palubka, aktualizace zrušena."
+            if _ver(m.group(1).decode()) != _ver(self.info["version"]):
+                # jinak by se aktualizace nabízela pořád dokola
+                return False, (f"Release {self.info['tag']} má v dash.py VERSION {m.group(1).decode()}. "
+                               "Autor musí v dash.py zvednout VERSION, aby seděla s tagem.")
             compile(files["dash.py"], "dash.py", "exec")   # rozbitý Python radši vůbec neinstalujeme
             backup = os.path.join(HERE, "backup", VERSION)
             os.makedirs(backup, exist_ok=True)
