@@ -32,6 +32,8 @@ Celá obrazovka: klávesa **F**. Historie zakázek: klávesa **H**. Jazyk, měna
 
 Dashboard se pak zapne se hrou a po jejím zavření se sám vypne.
 
+<img width="841" height="609" alt="image" src="https://github.com/user-attachments/assets/5d7af9cf-3a29-4c98-b4a2-e2bb0aa61033" />
+
 ## Aktualizace
 
 Dashboard se při startu podívá sem na GitHub, jestli je nová verze. Když ano, ukáže lištu
