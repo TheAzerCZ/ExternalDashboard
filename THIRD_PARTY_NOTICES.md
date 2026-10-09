@@ -8,7 +8,8 @@ It builds on the following projects, both licensed under the MIT License.
 https://github.com/RenCloud/scs-sdk-plugin
 
 The game plugin (`scs-telemetry.dll`) that exposes the telemetry through shared memory.
-It is not part of this repository; download it from the project's releases.
+An unmodified copy of the plugin is included in the `Install files` folder and is redistributed
+under its original MIT license below.
 
 ```
 The MIT License (MIT)
