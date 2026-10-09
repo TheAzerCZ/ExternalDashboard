@@ -5,6 +5,9 @@
 Dashboard na druhý monitor pro Euro Truck Simulator 2 a American Truck Simulator.
 Běží jen u tebe na počítači, nic neposílá ven.
 
+<img width="3840" height="1080" alt="02" src="https://github.com/user-attachments/assets/c2fdebc3-228b-4928-9983-cf1c34b46930" />
+<img width="1917" height="1080" alt="03" src="https://github.com/user-attachments/assets/5319c144-3cd1-4b48-a80a-48184a4f906e" />
+
 ## Instalace
 
 1. Stáhni a nainstaluj [Python](https://www.python.org/downloads/) (verze 3.9 nebo novější).
