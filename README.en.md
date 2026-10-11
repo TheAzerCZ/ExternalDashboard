@@ -46,6 +46,8 @@ Full screen: **F** key. Job history: **H** key. Language, currency and units: ge
 
 <img width="841" height="598" alt="image" src="https://github.com/user-attachments/assets/d542820c-781f-4297-b610-fcc0cccf5df3" />
 
+The dashboard then starts with the game and closes when you quit it.
+
 ## Tip: RPM LEDs on the wheel (Logitech G29 / G27)
  
 The LEDs on your wheel light up with engine RPM and blink above the red line.
@@ -53,8 +55,6 @@ The LEDs on your wheel light up with engine RPM and blink above the red line.
 1. In a command prompt, run once: `pip install hidapi`
 2. In the dashboard, open Settings (gear icon) and turn on **RPM LEDs on the wheel**.
 3. Below the option you'll see "Connected: Logitech G29". If not, check that the wheel is plugged in.
-
-The dashboard then starts with the game and closes when you quit it.
 
 ## Updates
 
