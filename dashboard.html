@@ -219,17 +219,19 @@
   .hbig { grid-template-columns: 1fr 1.4fr 1.2fr 1fr 1.8fr; }
   .hbig div { font-size: calc(var(--u)*2.8); white-space: normal; }
   .hbig div:last-child { font-size: calc(var(--u)*2); }
-  .hcols { display: grid; grid-template-columns: 1fr 1.6fr; gap: calc(var(--u)*2.4); min-height: 0; flex: 1; }
+  .hcols { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 2fr); gap: calc(var(--u)*2.4); min-height: 0; flex: 1; }
   .hcols > div { display: flex; flex-direction: column; gap: calc(var(--u)*1); min-height: 0; }
   .days { flex: 1; display: flex; align-items: flex-end; gap: calc(var(--u)*.6); min-height: 0; padding-bottom: calc(var(--u)*3.2); position: relative; }
   .day { flex: 1; max-width: calc(var(--u)*5); display: flex; flex-direction: column; justify-content: flex-end; align-items: center; height: 100%; position: relative; }
   .day i { width: 100%; background: var(--sign); border-radius: calc(var(--u)*.3) calc(var(--u)*.3) 0 0; min-height: 2px; }
   .day span { font-size: calc(var(--u)*1.05); color: var(--muted); position: absolute; bottom: calc(var(--u)*-2.8); white-space: nowrap; }
   .day em { font-style: normal; font-size: calc(var(--u)*1); margin-bottom: calc(var(--u)*.3); white-space: nowrap; }
-  .htable-wrap { overflow: auto; min-height: 0; }
+  .htable-wrap { overflow: auto; min-height: 0; min-width: 0; }
   #hJobs { width: 100%; border-collapse: collapse; font-size: calc(var(--u)*1.3); }
   #hJobs th { text-align: left; font-weight: 400; color: var(--muted); padding: calc(var(--u)*.5) calc(var(--u)*.6); position: sticky; top: 0; background: var(--road-2); }
   #hJobs td { padding: calc(var(--u)*.5) calc(var(--u)*.6); border-top: 1px solid var(--line); white-space: nowrap; }
+  /* trasa a náklad se smí zalomit, ať se na menší obrazovku vejdou i čísla vpravo */
+  #hJobs td:nth-child(2), #hJobs td:nth-child(3) { white-space: normal; min-width: 8ch; }
   #hJobs .r { text-align: right; }
   #hJobs tr.bad td { color: #ff5a52; }
   .neg { color: var(--amber); }
@@ -411,6 +413,9 @@
   <fieldset><legend data-i18n="language"></legend>
     <div class="srow"><select id="sLang"><option value="cs">Čeština</option><option value="en">English</option></select></div>
   </fieldset>
+  <fieldset><legend data-i18n="wheel"></legend>
+    <label class="scheck"><input type="checkbox" id="sWheel"><span><span data-i18n="wheelLeds"></span><small id="sWheelStatus"></small></span></label>
+  </fieldset>
   <fieldset><legend data-i18n="updates"></legend>
     <label class="scheck"><input type="checkbox" id="sUpd"><span><span data-i18n="updCheck"></span><small data-i18n="updHint"></small></span></label>
   </fieldset>
@@ -485,6 +490,9 @@ const I18N = {
     hBest: 'nejlepší zakázka', hBestPer: 'nejlepší zakázka, {v}/{u}', hEmpty: 'Zatím žádná doručená zakázka. Po prvním doručení se tu objeví graf.',
     hDayTip: '{n} zakázek, {d}', thWhen: 'Kdy', thRoute: 'Trasa', thCargo: 'Náklad', thRevenue: 'Výdělek',
     thPerKm: '{c}/{u}', thDamage: 'Poškození', hCancelled: 'zrušeno',
+    wheel: 'Volant', wheelLeds: 'RPM diody na volantu (Logitech G29 / G27)',
+    wheelSt: { off: 'Vypnuto.', nohid: 'Chybí knihovna. Do příkazového řádku napiš: pip install hidapi a restartuj dashboard.',
+      nowheel: 'Volant nenalezen. Je zapojený?', ok: 'Připojeno: {n}', error: 'Chyba komunikace s volantem: {n}' },
     updates: 'Aktualizace', updCheck: 'Kontrolovat nové verze', updHint: 'Jednou při startu se dashboard zeptá GitHubu, jestli je venku nová verze. Nic dalšího se neposílá a nic se neinstaluje bez tvého kliknutí.',
     updAvail: 'Nová verze {v}', updGo: 'Aktualizovat', updLater: 'Později', updWorking: 'Stahuji a instaluji verzi {v}…', updRestart: 'Restartuji dashboard…', updFail: 'Aktualizace se nepovedla',
     settings: 'Nastavení', language: 'Jazyk', currency: 'Měna', rate: 'Kurz', save: 'Uložit', cancel: 'Zrušit',
@@ -538,6 +546,9 @@ const I18N = {
     hBest: 'best job', hBestPer: 'best job, {v}/{u}', hEmpty: 'No delivered jobs yet. The chart will appear after your first delivery.',
     hDayTip: '{n} jobs, {d}', thWhen: 'When', thRoute: 'Route', thCargo: 'Cargo', thRevenue: 'Revenue',
     thPerKm: '{c}/{u}', thDamage: 'Damage', hCancelled: 'cancelled',
+    wheel: 'Wheel', wheelLeds: 'RPM LEDs on the wheel (Logitech G29 / G27)',
+    wheelSt: { off: 'Off.', nohid: 'Library missing. Run this in a command prompt: pip install hidapi and restart the dashboard.',
+      nowheel: 'Wheel not found. Is it plugged in?', ok: 'Connected: {n}', error: 'Wheel communication error: {n}' },
     updates: 'Updates', updCheck: 'Check for new versions', updHint: 'Once at startup the dashboard asks GitHub whether a new version is out. Nothing else is sent and nothing is installed without your click.',
     updAvail: 'New version {v}', updGo: 'Update', updLater: 'Later', updWorking: 'Downloading and installing {v}…', updRestart: 'Restarting dashboard…', updFail: 'Update failed',
     settings: 'Settings', language: 'Language', currency: 'Currency', rate: 'Rate', save: 'Save', cancel: 'Cancel',
@@ -559,7 +570,7 @@ const DEFAULT_RATES = {                        // výchozí kurzy při změně m
 };
 const CURRENCIES = ['CZK', 'EUR', 'USD', 'GBP', 'PLN'];
 
-let settings = { lang: 'cs', updates: true, ets2: { currency: 'CZK', rate: 24.4945, units: 'metric' }, ats: { currency: 'USD', rate: 1, units: 'imperial' } };
+let settings = { lang: 'cs', updates: true, wheelLeds: false, ets2: { currency: 'CZK', rate: 24.4945, units: 'metric' }, ats: { currency: 'USD', rate: 1, units: 'imperial' } };
 let lang = 'cs', locale = 'cs-CZ', gameKey = 'ets2', lastView = null;
 
 const t = (key, p = {}) => {
@@ -645,6 +656,10 @@ function render(v) {
     loadedVersion = loadedVersion || v.version;
   }
   showUpdate(v.update);
+  if (v.wheel) {
+    const [k, ...rest] = v.wheel.split(':');
+    $('sWheelStatus').textContent = (t('wheelSt')[k] || v.wheel).replace('{n}', rest.join(':'));
+  }
   document.body.classList.toggle('offline', !v.connected);
   gameKey = ((v.connected ? v.game : v.stats && v.stats.game) || 'ETS2').toLowerCase();
   if (v.stats) renderStats(v.stats);
@@ -884,6 +899,7 @@ function syncRate(g) {
 function openSettings() {
   $('sLang').value = settings.lang;
   $('sUpd').checked = settings.updates !== false;
+  $('sWheel').checked = !!settings.wheelLeds;
   fillCurrencies($('sEtsCur'), settings.ets2.currency); $('sEtsRate').value = settings.ets2.rate;
   fillCurrencies($('sAtsCur'), settings.ats.currency); $('sAtsRate').value = settings.ats.rate;
   $('sEtsUnits').value = settings.ets2.units || 'metric'; $('sAtsUnits').value = settings.ats.units || 'imperial';
@@ -900,6 +916,7 @@ $('sSave').onclick = async () => {
   const s = {
     lang: $('sLang').value,
     updates: $('sUpd').checked,
+    wheelLeds: $('sWheel').checked,
     ets2: { currency: $('sEtsCur').value, rate: num('sEtsRate'), units: $('sEtsUnits').value },
     ats: { currency: $('sAtsCur').value, rate: num('sAtsRate'), units: $('sAtsUnits').value },
   };

@@ -37,7 +37,7 @@ import urllib.request
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, urlparse
 
-VERSION = "1.3.2"   # musí sedět s tagem releasu na GitHubu (release v1.3.1 -> VERSION = "1.3.1")
+VERSION = "1.4.0"   # musí sedět s tagem releasu na GitHubu (release v1.3.1 -> VERSION = "1.3.1")
 HERE = os.path.dirname(os.path.abspath(__file__))
 STATS_FILE = os.path.join(HERE, "session.json")
 JOB_FILE = os.path.join(HERE, "job_progress.json")
@@ -52,6 +52,7 @@ UPDATE_FILES = ("dash.py", "dashboard.html", "dashboard-start.bat", "game-start.
 DEFAULT_CONFIG = {
     "lang": "cs",
     "updates": True,   # jednou při startu se zeptat GitHubu na novou verzi
+    "wheelLeds": False,  # RPM diody na volantu Logitech G29/G27 (potřebuje: pip install hidapi)
     "ets2": {"currency": "CZK", "rate": 24.4945, "units": "metric"},  # ETS2 počítá v eurech; 24,4945 = herní kurz
     "ats": {"currency": "USD", "rate": 1.0, "units": "imperial"},     # ATS počítá v dolarech
 }
@@ -64,6 +65,8 @@ def load_config():
             user = json.load(f)
         if user.get("lang") in ("cs", "en"):
             cfg["lang"] = user["lang"]
+        if isinstance(user.get("wheelLeds"), bool):
+            cfg["wheelLeds"] = user["wheelLeds"]
         if isinstance(user.get("updates"), bool):
             cfg["updates"] = user["updates"]
         for g in ("ets2", "ats"):
@@ -82,8 +85,8 @@ def load_config():
 def validate_config(user):
     """Vrátí očištěnou konfiguraci, nebo None, když je vstup nesmyslný."""
     try:
-        cfg = {"lang": user["lang"], "updates": user.get("updates", True)}
-        if cfg["lang"] not in ("cs", "en") or not isinstance(cfg["updates"], bool):
+        cfg = {"lang": user["lang"], "updates": user.get("updates", True), "wheelLeds": user.get("wheelLeds", False)}
+        if cfg["lang"] not in ("cs", "en") or not isinstance(cfg["updates"], bool) or not isinstance(cfg["wheelLeds"], bool):
             return None
         for g in ("ets2", "ats"):
             cur, rate, units = user[g]["currency"], float(user[g]["rate"]), user[g]["units"]
@@ -389,6 +392,7 @@ class Processor:
         self.dmg_acc, self.dmg_t, self.last_damage = {}, 0.0, 0.0
         self.delivery = None
         self.view = {"connected": False}
+        self.live = None
         self.db = sqlite3.connect(HISTORY_DB, check_same_thread=False)
         self.db.execute("""CREATE TABLE IF NOT EXISTS jobs (
             id INTEGER PRIMARY KEY, ts REAL, game TEXT, ok INTEGER, src TEXT, dst TEXT,
@@ -546,6 +550,7 @@ class Processor:
                 self.road_scale = 0
                 self.odo_anchor = self.fuel_anchor = None
                 self.view = {"connected": False, "stats": self._stats_view(None)}
+                self.live = None
                 return
             if self.prev is None:
                 # připojení ke hře: nové spuštění hry poznáme tak, že jsme viděli její konec,
@@ -590,6 +595,7 @@ class Processor:
                     self.stats["speeding_s"] += dt
                 self.stats["max_kmh"] = max(self.stats["max_kmh"], kmh)
             self.prev = d
+            self.live = (d["engineRpm"], d["engineRpmMax"], d["engineEnabled"] and not d["paused"])
             self.view = self._build(d)
             if now - self.last_save > 30 or self.pending:
                 self.save(); self._save_style(); self.last_save = now
@@ -820,7 +826,7 @@ class Processor:
     def snapshot(self):
         with self.lock:
             return json.dumps({**self.view, "settings": self.config, "version": VERSION,
-                               "update": UPDATER.public()}, ensure_ascii=False)
+                               "update": UPDATER.public(), "wheel": WHEEL.status}, ensure_ascii=False)
 
 
 # --------------------------------------------------------------------------
@@ -920,6 +926,104 @@ class Updater:
 
 
 UPDATER = Updater()
+
+
+# --------------------------------------------------------------------------
+#  RPM diody na volantu Logitech (G29 / G27) přes HID
+# --------------------------------------------------------------------------
+class WheelLeds:
+    """Rozsvěcí 5 diod na volantu podle otáček. Stejný HID příkaz používá ovladač hid-lg4ff v Linuxu:
+    [0xF8, 0x12, maska_diod, 0, 0, 0, 0x01]. Hra si FFB řídí sama, tohle s ním nekoliduje."""
+    LOGITECH = 0x046D
+    WHEELS = {0xC24F: "Logitech G29", 0xC260: "Logitech G29", 0xC29B: "Logitech G27"}
+    # podíl max. otáček, od kterého svítí 1.–5. dioda; nad BLINK všechny blikají (řaď!)
+    STEPS = (0.48, 0.56, 0.64, 0.72, 0.80)
+    BLINK = 0.88
+
+    def __init__(self):
+        self.proc = None
+        self.status = "off"        # off | nohid | nowheel | ok:<název> | error:<text>
+        self.dev = None
+        self.last_mask = None
+        self.last_sent = 0.0
+        self.retry = 0.0
+
+    def _open(self):
+        try:
+            import hid  # balíček "hidapi"
+        except ImportError:
+            self.status = "nohid"
+            return False
+        # Volant má víc HID rozhraní. Diody bere jen to herní (usage page 0x01, usage 0x04 = joystick),
+        # vendor rozhraní 0xFF00 zápis odmítne. Proto herní rozhraní zkoušíme jako první a jiné vůbec ne.
+        cands = [i for i in hid.enumerate(self.LOGITECH, 0) if i.get("product_id") in self.WHEELS]
+        cands = [i for i in cands if i.get("usage_page") in (0x01, None, 0) and i.get("usage") in (0x04, None, 0)]
+        cands.sort(key=lambda i: (i.get("usage_page") != 0x01, i.get("usage") != 0x04))
+        for info in cands:
+            name = self.WHEELS[info["product_id"]]
+            try:
+                dev = hid.device()
+                dev.open_path(info["path"])
+                self.dev, self.status = dev, "ok:" + name
+                return True
+            except (OSError, IOError):
+                continue           # volant má víc rozhraní, zkusíme další
+        self.status = "nowheel"
+        return False
+
+    def _send(self, mask, force=False):
+        if mask == self.last_mask and not force:
+            return
+        try:
+            n = self.dev.write([0x00, 0xF8, 0x12, mask, 0x00, 0x00, 0x00, 0x01])
+            if n is not None and n < 0:          # hidapi chybu nehlásí výjimkou, ale návratovou hodnotou -1
+                raise OSError(self.dev.error() if hasattr(self.dev, "error") else "write selhal")
+            self.last_mask, self.last_sent = mask, time.time()
+        except (OSError, IOError, ValueError) as e:
+            self.status = f"error:{e}"
+            self._close()
+            self.retry = time.time() + 5        # nezkoušet to 30× za sekundu
+
+    def _close(self):
+        if self.dev:
+            try:
+                self.dev.close()
+            except Exception:  # noqa: BLE001
+                pass
+        self.dev, self.last_mask = None, None
+        self.last_sent = 0.0
+
+    def mask_for(self, rpm, rpm_max, now):
+        if not rpm_max or rpm <= 0:
+            return 0
+        f = rpm / rpm_max
+        if f >= self.BLINK:
+            return 0x1F if int(now * 8) % 2 == 0 else 0x00
+        return sum(1 << i for i, step in enumerate(self.STEPS) if f >= step)
+
+    def run(self):
+        while True:
+            time.sleep(1 / 30)
+            enabled = self.proc and self.proc.config.get("wheelLeds")
+            if not enabled:
+                if self.dev:
+                    self._send(0)
+                    self._close()
+                self.status = "off"
+                continue
+            if not self.dev:
+                if time.time() < self.retry:
+                    continue
+                if not self._open():
+                    self.retry = time.time() + 5   # volant nezapojený -> zkusit znovu za 5 s
+                    continue
+            live = self.proc.live
+            mask = self.mask_for(live[0], live[1], time.time()) if live and live[2] else 0
+            # stav posíláme znovu každou půlvteřinu, kdyby ho mezitím přepsal G HUB nebo hra
+            self._send(mask, force=time.time() - self.last_sent > 0.5)
+
+
+WHEEL = WheelLeds()
 
 
 def make_handler(proc, allow_lan):
@@ -1035,6 +1139,8 @@ def main():
     srv = ThreadingHTTPServer((bind, a.port), make_handler(proc, a.lan))
     srv.daemon_threads = True
     UPDATER.server = srv
+    WHEEL.proc = proc
+    threading.Thread(target=WHEEL.run, daemon=True).start()
     if proc.config.get("updates", True) and not a.demo:
         threading.Thread(target=UPDATER.check, daemon=True).start()
     if a.exit_with_game:
@@ -1050,6 +1156,8 @@ def main():
     except KeyboardInterrupt:
         pass
     finally:
+        if WHEEL.dev:
+            WHEEL._send(0)       # zhasnout diody na volantu
         with proc.lock:
             proc.save()
         srv.server_close()

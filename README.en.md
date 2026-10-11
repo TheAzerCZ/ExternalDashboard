@@ -8,6 +8,20 @@ It runs only on your computer and sends nothing out.
 <img width="3840" height="1080" alt="01" src="https://github.com/user-attachments/assets/1c187ae3-80c8-4027-9fb2-fd0ed215b015" />
 <img width="1907" height="1073" alt="04" src="https://github.com/user-attachments/assets/ebd5d9c9-ef22-402b-9205-e3feb2ab6d1a" />
 
+## Features
+ 
+- **Destination sign**: remaining distance, real-time ETA and arrival, in-game driving time and arrival, route progress.
+- **Driving**: speed with the limit (orange up to +5 km/h, red with a pulse above that), cruise control, gear and RPM, warning lights as icons, blinkers, diesel, AdBlue, range and fuel consumption.
+- **Rest & plan**: time to mandatory rest (orange on the warning, red when it's due), whether you make it without sleeping and how much time you have left, whether your fuel lasts (how much is missing and where it runs out), in-game and real time.
+- **Job**: cargo, pay and pay per km, delivery deadline, time buffer, cargo damage.
+- **Vehicle**: truck and trailer wear, temperatures and pressures, collision alerts.
+- **Session**: distance, time at the wheel, net profit, fines, tolls, ferries, fuel used, average speed, time over the limit and an event log. Resets automatically when the game starts.
+- **Delivery summary**: revenue, XP, distance and a driving style score (braking, cornering, collisions, speeding).
+- **Job history**: earnings per day chart and a job table, separate for ETS2 and ATS.
+- **RPM LEDs on the wheel** for Logitech G29 / G27.
+- **Settings**: Czech / English, currency, exchange rate and units (km / miles), separate for ETS2 and ATS.
+- **Automatic updates** from GitHub with one click.
+
 ## Installation
 
 1. Download and install [Python](https://www.python.org/downloads/) (version 3.9 or newer).
@@ -30,9 +44,17 @@ Full screen: **F** key. Job history: **H** key. Language, currency and units: ge
    "<path to your dashboard>\game-start.bat" %command%
    ```
 
-The dashboard then starts with the game and closes when you quit it.
-
 <img width="841" height="598" alt="image" src="https://github.com/user-attachments/assets/d542820c-781f-4297-b610-fcc0cccf5df3" />
+
+## Tip: RPM LEDs on the wheel (Logitech G29 / G27)
+ 
+The LEDs on your wheel light up with engine RPM and blink above the red line.
+ 
+1. In a command prompt, run once: `pip install hidapi`
+2. In the dashboard, open Settings (gear icon) and turn on **RPM LEDs on the wheel**.
+3. Below the option you'll see "Connected: Logitech G29". If not, check that the wheel is plugged in.
+
+The dashboard then starts with the game and closes when you quit it.
 
 ## Updates
 
