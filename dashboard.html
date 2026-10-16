@@ -295,7 +295,32 @@
   button.primary:hover { color: var(--road); }
   .gtabs { display: flex; gap: calc(var(--u)*.5); }
   .gtabs button.on { background: var(--white); color: var(--road); border-color: var(--white); }
-  #setBtn svg { width: 1.2em; height: 1.2em; vertical-align: -.25em; }
+  #setBtn svg, #vidBtn svg { width: 1.2em; height: 1.2em; vertical-align: -.25em; }
+  #vidBtn.on { color: var(--white); border-color: var(--muted); }
+  /* plovoucí video: lišta nahoře slouží k posouvání, roh vpravo dole ke změně velikosti (poměr 16:9) */
+  #video { position: fixed; z-index: 21;   /* nad překryvem „Čekám na hru", ať jde koukat i při načítání hry */ display: flex; flex-direction: column; background: #000;
+    border: calc(var(--u)*.2) solid var(--line); border-radius: calc(var(--u)*.6); overflow: hidden;
+    box-shadow: 0 calc(var(--u)*.6) calc(var(--u)*2.4) rgba(0,0,0,.5); }
+  #video[hidden] { display: none; }
+  .vbar { display: flex; align-items: center; gap: calc(var(--u)*.5); padding: calc(var(--u)*.35) calc(var(--u)*.5) calc(var(--u)*.35) calc(var(--u)*.9);
+    background: var(--road-2); cursor: move; user-select: none; touch-action: none; }
+  .vbar span { flex: 1; min-width: 0; color: var(--muted); font-size: calc(var(--u)*1.15); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .vbar button { cursor: pointer; padding: calc(var(--u)*.1) calc(var(--u)*.7); white-space: nowrap; }
+  .vbar button.on { color: var(--road); background: var(--white); border-color: var(--white); }
+  .vform { display: grid; grid-template-columns: 1fr auto; gap: calc(var(--u)*.5); padding: calc(var(--u)*.8); background: var(--road-2); border-top: 1px solid var(--line); }
+  .vform[hidden] { display: none; }
+  .vform input { font: inherit; font-size: calc(var(--u)*1.3); color: var(--white); background: var(--road); border: 1px solid var(--line); border-radius: calc(var(--u)*.4); padding: calc(var(--u)*.35) calc(var(--u)*.7); min-width: 0; }
+  .vform input:focus-visible { outline: 2px solid var(--white); outline-offset: 1px; }
+  .vform small { grid-column: 1 / -1; color: var(--muted); font-size: calc(var(--u)*1.1); line-height: 1.35; }
+  .vform small.err { color: var(--amber); }
+  .vframe { position: relative; aspect-ratio: 16 / 9; background: #000; }
+  .vframe iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; }
+  .vframe:empty::after { content: "▶"; position: absolute; inset: 0; display: grid; place-items: center; color: var(--line); font-size: calc(var(--u)*5); }
+  .vgrip { flex: none; width: calc(var(--u)*2); height: calc(var(--u)*2); cursor: nesw-resize; touch-action: none; color: var(--muted); }
+  .vgrip:hover { color: var(--white); }
+  .vgrip svg { width: 100%; height: 100%; display: block; }
+  /* při posouvání nesmí myš "spadnout" do iframe, jinak by okno přestalo reagovat */
+  #video.drag iframe { pointer-events: none; }
 </style>
 </head>
 <body class="offline">
@@ -371,6 +396,7 @@
     <div class="head"><h2 id="since"></h2><div class="btns">
       <button id="histBtn" data-i18n="history" data-i18n-title="historyTip"></button>
       <button id="reset" data-i18n="newSession" data-i18n-title="newSessionTip"></button>
+      <button id="vidBtn" data-i18n-title="videoTip" aria-label="Video"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="2.5" y="5" width="19" height="14" rx="2.5" fill="none" stroke="currentColor" stroke-width="2"/><path d="M10 9.2v5.6l4.8-2.8z" fill="currentColor"/></svg></button>
       <button id="setBtn" data-i18n-title="settings" aria-label="Settings"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 15.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7z" fill="none" stroke="currentColor" stroke-width="2"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z" fill="none" stroke="currentColor" stroke-width="1.6"/></svg></button>
     </div></div>
     <div class="big3">
@@ -416,6 +442,9 @@
   <fieldset><legend data-i18n="wheel"></legend>
     <label class="scheck"><input type="checkbox" id="sWheel"><span><span data-i18n="wheelLeds"></span><small id="sWheelStatus"></small></span></label>
   </fieldset>
+  <fieldset><legend>Video</legend>
+    <label class="scheck"><input type="checkbox" id="sVidPause"><span><span data-i18n="videoAutoPause"></span><small data-i18n="videoAutoPauseHint"></small></span></label>
+  </fieldset>
   <fieldset><legend data-i18n="updates"></legend>
     <label class="scheck"><input type="checkbox" id="sUpd"><span><span data-i18n="updCheck"></span><small data-i18n="updHint"></small></span></label>
   </fieldset>
@@ -433,6 +462,22 @@
   <p class="sver" id="sVer"></p>
   <div class="sbtns"><button id="sCancel" data-i18n="cancel"></button><button id="sSave" class="primary" data-i18n="save"></button></div>
 </div></div>
+
+<div id="video" hidden>
+  <div class="vbar" id="vBar">
+    <span id="vTitle">Video</span>
+    <button id="vSync" data-i18n="videoSync" data-i18n-title="videoSyncTip"></button>
+    <button id="vEdit" data-i18n="videoChange"></button>
+    <button id="vClose" data-i18n-title="videoClose" aria-label="Close">✕</button>
+    <div class="vgrip" id="vGrip" data-i18n-title="videoResize"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M12 3h5v5M17 3l-6 6M8 17H3v-5M3 17l6-6" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+  </div>
+  <form class="vform" id="vForm" hidden>
+    <input id="vUrl" type="url" data-i18n-ph="videoPh" autocomplete="off" spellcheck="false">
+    <button class="primary" data-i18n="videoPlay"></button>
+    <small id="vHint" data-i18n="videoHint"></small>
+  </form>
+  <div class="vframe" id="vFrame"></div>
+</div>
 
 <div id="updBar" hidden><b id="updTitle"></b><span id="updNotes"></span><button id="updLater" data-i18n="updLater"></button><button id="updGo" class="primary" data-i18n="updGo"></button></div>
 
@@ -495,6 +540,12 @@ const I18N = {
       nowheel: 'Volant nenalezen. Je zapojený?', ok: 'Připojeno: {n}', error: 'Chyba komunikace s volantem: {n}' },
     updates: 'Aktualizace', updCheck: 'Kontrolovat nové verze', updHint: 'Jednou při startu se dashboard zeptá GitHubu, jestli je venku nová verze. Nic dalšího se neposílá a nic se neinstaluje bez tvého kliknutí.',
     updAvail: 'Nová verze {v}', updGo: 'Aktualizovat', updLater: 'Později', updWorking: 'Stahuji a instaluji verzi {v}…', updRestart: 'Restartuji dashboard…', updFail: 'Aktualizace se nepovedla',
+    videoTip: 'Plovoucí video – YouTube, Twitch (klávesa V)', videoChange: 'Odkaz',
+    videoSync: 'Pauza se hrou', videoSyncTip: 'Zapnuto: YouTube se zastaví, když pozastavíš hru, a po návratu se rozjede. Vypnuto: hraje i v menu.', videoClose: 'Zavřít video', videoResize: 'Táhni pro změnu velikosti',
+    videoPh: 'Vlož odkaz na YouTube nebo Twitch', videoPlay: 'Přehrát',
+    videoHint: 'YouTube: video, playlist nebo živý přenos. Twitch: kanál (živě) nebo záznam. Okno posuneš tažením za lištu.',
+    videoBad: 'Tenhle odkaz neumím přehrát. Zkus odkaz na video z YouTube nebo kanál či záznam z Twitche.',
+    videoAutoPause: 'Pozastavit YouTube, když je hra pozastavená', videoAutoPauseHint: 'Po návratu do hry se video samo rozjede. Twitch se nepozastavuje (u živého přenosu by stejně utekl).',
     settings: 'Nastavení', language: 'Jazyk', currency: 'Měna', rate: 'Kurz', save: 'Uložit', cancel: 'Zrušit',
     rateHint: 'ETS2 počítá v eurech a ATS v dolarech, dashboard částky jen přepočítává. Výchozí kurz koruny (24,4945) je stejný, jaký používá ETS2. Ostatní výchozí kurzy jsou přibližné, klidně si je uprav.',
     waiting: 'Čekám na hru',
@@ -551,6 +602,12 @@ const I18N = {
       nowheel: 'Wheel not found. Is it plugged in?', ok: 'Connected: {n}', error: 'Wheel communication error: {n}' },
     updates: 'Updates', updCheck: 'Check for new versions', updHint: 'Once at startup the dashboard asks GitHub whether a new version is out. Nothing else is sent and nothing is installed without your click.',
     updAvail: 'New version {v}', updGo: 'Update', updLater: 'Later', updWorking: 'Downloading and installing {v}…', updRestart: 'Restarting dashboard…', updFail: 'Update failed',
+    videoTip: 'Floating video – YouTube, Twitch (V key)', videoChange: 'Link',
+    videoSync: 'Pause with game', videoSyncTip: 'On: YouTube pauses when you pause the game and resumes when you get back. Off: keeps playing in menus.', videoClose: 'Close video', videoResize: 'Drag to resize',
+    videoPh: 'Paste a YouTube or Twitch link', videoPlay: 'Play',
+    videoHint: 'YouTube: a video, playlist or live stream. Twitch: a channel (live) or a past broadcast. Drag the bar to move the window.',
+    videoBad: 'Can’t play this link. Try a YouTube video, or a Twitch channel or past broadcast.',
+    videoAutoPause: 'Pause YouTube while the game is paused', videoAutoPauseHint: 'The video resumes when you get back to the game. Twitch is not paused (a live stream would run away anyway).',
     settings: 'Settings', language: 'Language', currency: 'Currency', rate: 'Rate', save: 'Save', cancel: 'Cancel',
     rateHint: 'ETS2 pays in euros and ATS in dollars; the dashboard only converts the amounts. The default CZK rate (24.4945) matches the one ETS2 uses. Other default rates are approximate, feel free to adjust them.',
     waiting: 'Waiting for the game',
@@ -581,12 +638,14 @@ function applyStatic() {
   document.documentElement.lang = lang;
   document.querySelectorAll('[data-i18n]').forEach(el => { el.textContent = t(el.dataset.i18n); });
   document.querySelectorAll('[data-i18n-title]').forEach(el => { el.title = t(el.dataset.i18nTitle); });
+  document.querySelectorAll('[data-i18n-ph]').forEach(el => { el.placeholder = t(el.dataset.i18nPh); });
   document.querySelectorAll('[data-i18n-html]').forEach(el => { el.innerHTML = t(el.dataset.i18nHtml); });
   document.title = lang === 'en' ? 'Truck dashboard' : 'Palubka';
 }
 function setSettings(s) {
   const changed = JSON.stringify(s) !== JSON.stringify(settings);
   settings = s;
+  if (!video && s.video) { video = { ...s.video }; if (video.open) openVideo(false); }   // jen poprvé, pak platí stav v okně
   if (changed || lang !== s.lang) {
     lang = s.lang; locale = lang === 'en' ? 'en-GB' : 'cs-CZ';
     applyStatic(); tickClock();
@@ -665,6 +724,7 @@ function render(v) {
   if (v.stats) renderStats(v.stats);
   if (!v.connected) return;
   document.body.classList.toggle('paused', v.paused);
+  videoGamePause(v.paused);
 
   // cedule
   const j = v.job, r = v.route;
@@ -824,6 +884,7 @@ document.addEventListener('keydown', e => {
   if (/^(INPUT|SELECT|TEXTAREA)$/.test(e.target.tagName)) { if (e.key === 'Escape') $('settings').hidden = true; return; }
   if (e.key === 'f' || e.key === 'F') document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen();
   if (e.key === 'h' || e.key === 'H') $('history').hidden ? openHistory() : ($('history').hidden = true);
+  if (e.key === 'v' || e.key === 'V') { e.preventDefault(); toggleVideo(); }   // jinak se „v" propíše do pole pro odkaz
   if (e.key === 'Escape') { $('history').hidden = true; $('settings').hidden = true; closeDelivery(); }
 });
 
@@ -900,6 +961,7 @@ function openSettings() {
   $('sLang').value = settings.lang;
   $('sUpd').checked = settings.updates !== false;
   $('sWheel').checked = !!settings.wheelLeds;
+  $('sVidPause').checked = !video || video.autoPause !== false;
   fillCurrencies($('sEtsCur'), settings.ets2.currency); $('sEtsRate').value = settings.ets2.rate;
   fillCurrencies($('sAtsCur'), settings.ats.currency); $('sAtsRate').value = settings.ats.rate;
   $('sEtsUnits').value = settings.ets2.units || 'metric'; $('sAtsUnits').value = settings.ats.units || 'imperial';
@@ -919,10 +981,186 @@ $('sSave').onclick = async () => {
     wheelLeds: $('sWheel').checked,
     ets2: { currency: $('sEtsCur').value, rate: num('sEtsRate'), units: $('sEtsUnits').value },
     ats: { currency: $('sAtsCur').value, rate: num('sAtsRate'), units: $('sAtsUnits').value },
+    video: { ...(video || settings.video), autoPause: $('sVidPause').checked },
   };
   const res = await fetch('/api/settings', { method: 'POST', headers: { 'X-Dash': '1', 'Content-Type': 'application/json' }, body: JSON.stringify(s) });
-  if (res.ok) { setSettings(s); if (lastView) render(lastView); $('settings').hidden = true; }
+  if (res.ok) { if (video) { video.autoPause = s.video.autoPause; showSync(); } setSettings(s); if (lastView) render(lastView); $('settings').hidden = true; }
 };
+
+// ---------- plovoucí video ----------
+// Odkaz se rozebere na ID a adresa přehrávače se skládá jen z nich, nic jiného se do iframe nedostane.
+const YT = 'https://www.youtube.com';
+const TWITCH_RESERVED = ['directory', 'videos', 'settings', 'search', 'downloads', 'subscriptions', 'wallet', 'inventory', 'drops', 'turbo', 'p'];
+let video = null, ytState = -1, ytAutoPaused = false, gamePaused = false, vSaveT = null;
+
+function parseVideo(raw) {
+  let u;
+  try { u = new URL(/^https?:\/\//i.test(raw) ? raw : 'https://' + raw); } catch { return null; }
+  const host = u.hostname.toLowerCase().replace(/^(www|m|music)\./, ''), p = u.pathname.split('/').filter(Boolean), q = u.searchParams;
+  if (['youtube.com', 'youtu.be', 'youtube-nocookie.com'].includes(host)) {
+    const ok = s => /^[\w-]{11}$/.test(s || '') ? s : null;
+    const id = host === 'youtu.be' ? ok(p[0]) : p[0] === 'watch' ? ok(q.get('v')) : ['embed', 'live', 'shorts', 'v'].includes(p[0]) ? ok(p[1]) : null;
+    const list = /^[\w-]{12,64}$/.test(q.get('list') || '') ? q.get('list') : null;
+    if (!id && !list) return null;
+    const m = /^(?:(\d+)h)?(?:(\d+)m)?(?:(\d+)s?)?$/.exec(q.get('t') || q.get('start') || '');   // t=90, t=1m30s
+    return { kind: 'yt', id, list, start: m ? (+m[1] || 0) * 3600 + (+m[2] || 0) * 60 + (+m[3] || 0) : 0 };
+  }
+  if (['twitch.tv', 'player.twitch.tv'].includes(host)) {
+    const vid = host === 'player.twitch.tv' ? (q.get('video') || '').replace(/^v/, '') : p[0] === 'videos' ? p[1] || '' : '';
+    if (/^\d{1,15}$/.test(vid)) return { kind: 'twitch', video: vid };
+    const ch = (host === 'player.twitch.tv' ? q.get('channel') : p[0]) || '';
+    if (/^\w{3,25}$/.test(ch) && !TWITCH_RESERVED.includes(ch.toLowerCase())) return { kind: 'twitch', channel: ch.toLowerCase() };
+  }
+  return null;
+}
+function embedUrl(v, autoplay) {
+  if (v.kind === 'yt') {
+    const q = new URLSearchParams({ enablejsapi: 1, origin: location.origin, rel: 0, playsinline: 1, autoplay: autoplay ? 1 : 0 });
+    if (v.list) q.set('list', v.list);
+    if (v.start) q.set('start', v.start);
+    return `${YT}/embed/${v.id || 'videoseries'}?${q}`;
+  }
+  const q = new URLSearchParams({ autoplay: autoplay ? 'true' : 'false' });
+  if (v.channel) q.set('channel', v.channel); else q.set('video', 'v' + v.video);
+  // Twitch pustí přehrávač jen na stránkách uvedených v parent
+  new Set([location.hostname, 'localhost', '127.0.0.1']).forEach(h => q.append('parent', h));
+  return 'https://player.twitch.tv/?' + q;
+}
+function loadVideo(autoplay) {
+  const v = video.url ? parseVideo(video.url) : null, box = $('vFrame');
+  box.innerHTML = ''; ytState = -1; ytAutoPaused = false;
+  $('vTitle').textContent = !v ? 'Video' : v.kind === 'yt' ? 'YouTube' : 'Twitch' + (v.channel ? ' · ' + v.channel : '');
+  $('vForm').hidden = !!v;
+  if (!v) return;
+  const f = document.createElement('iframe');
+  f.allow = 'autoplay; encrypted-media; picture-in-picture; fullscreen';
+  f.allowFullscreen = true;
+  f.referrerPolicy = 'strict-origin-when-cross-origin';   // YouTube bez refereru přehrávač odmítne (chyba 153)
+  if (v.kind === 'yt') f.onload = () => ytPost({ event: 'listening' });   // pak posílá stav přehrávání
+  f.src = embedUrl(v, autoplay);
+  box.append(f);
+}
+// YouTube přehrávač se dá ovládat zprávami přes postMessage (enablejsapi=1), bez jejich knihovny
+function ytPost(msg) {
+  const f = $('vFrame').firstChild;
+  if (f && f.contentWindow) f.contentWindow.postMessage(JSON.stringify({ ...msg, id: 1, channel: 'widget' }), YT);
+}
+window.addEventListener('message', e => {
+  const f = $('vFrame').firstChild;
+  if (e.origin !== YT || !f || e.source !== f.contentWindow) return;
+  let d; try { d = JSON.parse(e.data); } catch { return; }
+  if (d.event !== 'infoDelivery' || !d.info) return;
+  if (typeof d.info.playerState === 'number') {
+    // uživatel video pustil sám během pauzy hry => po návratu do hry už ho nepouštíme podruhé
+    if (d.info.playerState === 1 && ytState !== 1 && gamePaused) ytAutoPaused = false;
+    ytState = d.info.playerState;
+  }
+  if (d.info.videoData && d.info.videoData.title) { $('vTitle').textContent = 'YouTube · ' + d.info.videoData.title; $('vTitle').title = d.info.videoData.title; }
+});
+function videoGamePause(p) {
+  if (p === gamePaused) return;
+  gamePaused = p;
+  if (!video || !video.open || !video.autoPause) return;
+  if (p && ytState === 1) { ytPost({ event: 'command', func: 'pauseVideo', args: [] }); ytAutoPaused = true; }
+  else if (!p && ytAutoPaused) { ytPost({ event: 'command', func: 'playVideo', args: [] }); ytAutoPaused = false; }
+}
+// poloha a šířka okna v px, vždy celé na obrazovce; výška plyne z poměru 16:9
+function placeVideo() {
+  const el = $('video'), vw = innerWidth, vh = innerHeight, m = 16;
+  if (!vw || !vh) return video.box;   // minimalizované okno / záložka na pozadí: nic nepočítat, jinak by se uložilo 0,0
+  let [x, y, w] = video.box || [Infinity, Infinity, Math.round(vw * 0.32)];
+  w = Math.round(Math.max(280, Math.min(w, vw - 2 * m)));
+  el.style.width = w + 'px';
+  const h = el.offsetHeight;
+  x = Math.round(Math.max(0, Math.min(x, vw - w - (video.box ? 0 : m))));
+  y = Math.round(Math.max(0, Math.min(y, vh - h - (video.box ? 0 : m))));
+  el.style.left = x + 'px'; el.style.top = y + 'px';
+  return [x, y, w];
+}
+// změna výšky (formulář s odkazem): okno přilepené ke spodku obrazovky tam zůstane
+function keepBottom(fn) {
+  const r = $('video').getBoundingClientRect(), stuck = r.bottom >= innerHeight - 24;
+  fn();
+  if (stuck && video.box) video.box[1] = r.bottom - $('video').offsetHeight;
+  video.box = placeVideo();
+}
+function saveVideo() {
+  clearTimeout(vSaveT);
+  vSaveT = setTimeout(() => {
+    fetch('/api/settings', { method: 'POST', headers: { 'X-Dash': '1', 'Content-Type': 'application/json' }, body: JSON.stringify({ ...settings, video }) }).catch(() => {});
+  }, 300);
+}
+function openVideo(autoplay) {
+  video.open = true;
+  $('video').hidden = false; $('vidBtn').classList.add('on');
+  showSync();
+  loadVideo(autoplay);
+  video.box = placeVideo();
+  if (!video.url) $('vUrl').focus();
+}
+function closeVideo() {
+  video.open = false;
+  $('video').hidden = true; $('vidBtn').classList.remove('on');
+  $('vFrame').innerHTML = '';   // zastaví i zvuk
+}
+function toggleVideo() {
+  if (!video) return;   // nastavení ze serveru ještě nedorazilo
+  video.open ? closeVideo() : openVideo(true);
+  saveVideo();
+}
+function showSync() {
+  $('vSync').classList.toggle('on', !!video.autoPause);
+  $('vSync').setAttribute('aria-pressed', !!video.autoPause);
+}
+$('vSync').onclick = () => {
+  video.autoPause = !video.autoPause;
+  // vypnuto v menu, kde jsme video sami zastavili => hned ho zase pustíme
+  if (!video.autoPause && ytAutoPaused) { ytPost({ event: 'command', func: 'playVideo', args: [] }); ytAutoPaused = false; }
+  showSync();
+  saveVideo();
+};
+$('vidBtn').onclick = toggleVideo;
+$('vClose').onclick = toggleVideo;
+$('vEdit').onclick = () => {
+  const f = $('vForm');
+  keepBottom(() => { f.hidden = !f.hidden; });
+  if (!f.hidden) { $('vUrl').value = video.url; $('vUrl').select(); $('vUrl').focus(); }
+  saveVideo();
+};
+$('vForm').onsubmit = e => {
+  e.preventDefault();
+  const url = $('vUrl').value.trim(), ok = !!parseVideo(url);
+  $('vHint').textContent = t(ok ? 'videoHint' : 'videoBad');
+  $('vHint').classList.toggle('err', !ok);
+  if (!ok) return;
+  video.url = url;
+  keepBottom(() => loadVideo(true));
+  saveVideo();
+};
+// posouvání za lištu, změna šířky za úchyt vpravo
+$('vBar').addEventListener('pointerdown', e => {
+  const resize = !!e.target.closest('#vGrip');
+  if (e.button !== 0 || (!resize && e.target.closest('button'))) return;
+  e.preventDefault();
+  const bar = $('vBar'), el = $('video'), r = el.getBoundingClientRect(), sx = e.clientX, sy = e.clientY;
+  const [x0, y0, w0] = [r.left, r.top, r.width];
+  el.classList.add('drag');
+  bar.setPointerCapture(e.pointerId);
+  const move = ev => {
+    const dx = ev.clientX - sx, dy = ev.clientY - sy;
+    video.box = resize ? [x0, y0, w0 + dx] : [x0 + dx, y0 + dy, w0];
+    video.box = placeVideo();
+  };
+  const up = () => {
+    el.classList.remove('drag');
+    bar.removeEventListener('pointermove', move);
+    bar.removeEventListener('pointerup', up); bar.removeEventListener('pointercancel', up);
+    saveVideo();
+  };
+  bar.addEventListener('pointermove', move);
+  bar.addEventListener('pointerup', up); bar.addEventListener('pointercancel', up);
+});
+addEventListener('resize', () => { if (video && video.open) placeVideo(); });
 
 // ---------- aktualizace ----------
 let loadedVersion = null, updDismissed = null, updBusy = false;

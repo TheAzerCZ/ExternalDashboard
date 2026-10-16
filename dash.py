@@ -37,7 +37,7 @@ import urllib.request
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, urlparse
 
-VERSION = "1.4.0"   # musí sedět s tagem releasu na GitHubu (release v1.3.1 -> VERSION = "1.3.1")
+VERSION = "1.5.0"   # musí sedět s tagem releasu na GitHubu (release v1.3.1 -> VERSION = "1.3.1")
 HERE = os.path.dirname(os.path.abspath(__file__))
 STATS_FILE = os.path.join(HERE, "session.json")
 JOB_FILE = os.path.join(HERE, "job_progress.json")
@@ -55,7 +55,26 @@ DEFAULT_CONFIG = {
     "wheelLeds": False,  # RPM diody na volantu Logitech G29/G27 (potřebuje: pip install hidapi)
     "ets2": {"currency": "CZK", "rate": 24.4945, "units": "metric"},  # ETS2 počítá v eurech; 24,4945 = herní kurz
     "ats": {"currency": "USD", "rate": 1.0, "units": "imperial"},     # ATS počítá v dolarech
+    # plovoucí video (YouTube / Twitch): odkaz, jestli je okno otevřené, jeho poloha [x, y, šířka] v px
+    "video": {"url": "", "open": False, "autoPause": True, "box": None},
 }
+
+
+def clean_video(u):
+    """Očistí nastavení videa, nesmyslné položky nahradí výchozími. Odkaz rozebírá až frontend."""
+    v = dict(DEFAULT_CONFIG["video"])
+    if not isinstance(u, dict):
+        return v
+    if isinstance(u.get("url"), str) and len(u["url"]) <= 500:
+        v["url"] = u["url"].strip()
+    for k in ("open", "autoPause"):
+        if isinstance(u.get(k), bool):
+            v[k] = u[k]
+    box = u.get("box")
+    if (isinstance(box, list) and len(box) == 3
+            and all(isinstance(n, (int, float)) and not isinstance(n, bool) and 0 <= n <= 20000 for n in box)):
+        v["box"] = [round(n) for n in box]
+    return v
 
 
 def load_config():
@@ -77,6 +96,7 @@ def load_config():
                 cfg[g]["rate"] = float(u["rate"])
             if u.get("units") in ("metric", "imperial"):
                 cfg[g]["units"] = u["units"]
+        cfg["video"] = clean_video(user.get("video"))
     except (OSError, ValueError, AttributeError):
         pass
     return cfg
@@ -93,6 +113,7 @@ def validate_config(user):
             if cur not in CURRENCIES or not 0 < rate < 100000 or units not in ("metric", "imperial"):
                 return None
             cfg[g] = {"currency": cur, "rate": rate, "units": units}
+        cfg["video"] = clean_video(user.get("video"))
         return cfg
     except (KeyError, TypeError, ValueError):
         return None

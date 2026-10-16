@@ -19,6 +19,7 @@ It runs only on your computer and sends nothing out.
 - **Delivery summary**: revenue, XP, distance and a driving style score (braking, cornering, collisions, speeding).
 - **Job history**: earnings per day chart and a job table, separate for ETS2 and ATS.
 - **RPM LEDs on the wheel** for Logitech G29 / G27.
+- **Floating video**: YouTube (video, playlist, live stream) or Twitch (channel, past broadcast) in a window you can move and resize. YouTube pauses on its own when the game is paused.
 - **Settings**: Czech / English, currency, exchange rate and units (km / miles), separate for ETS2 and ATS.
 - **Automatic updates** from GitHub with one click.
 
@@ -33,7 +34,7 @@ It runs only on your computer and sends nothing out.
 3. Start the dashboard with `dashboard-start.bat`.
 4. Start the game. Confirm the SDK message when the game starts. Everything else syncs on its own.
 
-Full screen: **F** key. Job history: **H** key. Language, currency and units: gear icon.
+Full screen: **F** key. Job history: **H** key. Video: **V** key. Language, currency and units: gear icon.
 
 ## Tip: start automatically with the game
 

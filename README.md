@@ -19,6 +19,7 @@ Běží jen u tebe na počítači, nic neposílá ven.
 - **Souhrn po doručení**: výdělek, XP, najeté km a hodnocení stylu jízdy (brzdění, zatáčky, nárazy, rychlost).
 - **Historie zakázek**: graf výdělku po dnech a tabulka zakázek, zvlášť pro ETS2 a ATS.
 - **RPM diody na volantu** Logitech G29 / G27.
+- **Plovoucí video**: YouTube (video, playlist, živý přenos) nebo Twitch (kanál, záznam) v okně, které si posuneš a zvětšíš. YouTube se při pauze hry sám zastaví.
 - **Nastavení**: čeština / angličtina, měna a kurz a jednotky (km / míle) zvlášť pro ETS2 a ATS.
 - **Automatické aktualizace** z GitHubu jedním kliknutím.
 
@@ -33,7 +34,7 @@ Běží jen u tebe na počítači, nic neposílá ven.
 3. Spusť dashboard přes `dashboard-start.bat`.
 4. Zapni hru. Při startu hry potvrď hlášku o SDK. Pak už se vše synchronizuje samo.
 
-Celá obrazovka: klávesa **F**. Historie zakázek: klávesa **H**. Jazyk, měna a jednotky: ozubené kolo.
+Celá obrazovka: klávesa **F**. Historie zakázek: klávesa **H**. Video: klávesa **V**. Jazyk, měna a jednotky: ozubené kolo.
 
 ## Tip: automatické spouštění se hrou
 
